@@ -1,0 +1,19 @@
+name: Bug report
+description: Report a reproducible bug
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: repro
+    attributes: { label: "Steps to Reproduce", placeholder: "1) ..." }
+    validations: { required: true }
+  - type: textarea
+    id: expected
+    attributes: { label: "Expected vs Actual", placeholder: "Expected: ... / Actual: ..." }
+    validations: { required: true }
+  - type: input
+    id: artifacts
+    attributes: { label: "Artifacts", description: "requestId, jobId, logs, trace url" }
+  - type: dropdown
+    id: severity
+    attributes: { label: "Severity", options: ["Blocker","High","Medium","Low"] }

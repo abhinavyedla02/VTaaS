@@ -1,0 +1,19 @@
+name: Task
+description: Focused unit of work
+title: "task: "
+labels: ["task"]
+body:
+  - type: textarea
+    id: context
+    attributes: { label: "Context", placeholder: "Why this matters" }
+  - type: textarea
+    id: scope
+    attributes: { label: "Scope (in/out)", placeholder: "In:\nOut:" }
+  - type: checkboxes
+    id: ac
+    attributes:
+      label: Acceptance Criteria
+      options:
+        - label: "Unit/integration/e2e tests updated"
+        - label: "Observability (logs/metrics/traces) added"
+        - label: "Rollback steps documented"

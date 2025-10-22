@@ -1,0 +1,38 @@
+
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: vtaas_db
+    environment:
+      POSTGRES_USER: vtaas
+      POSTGRES_PASSWORD: vtaas
+      POSTGRES_DB: vtaas
+    ports:
+      - "5432:5432"
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vtaas -d vtaas || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  localstack:
+    image: localstack/localstack:latest
+    container_name: vtaas_localstack
+    environment:
+      - SERVICES=s3,sqs
+      - DEBUG=1
+      - LS_LOG=info
+      - DOCKER_HOST=unix:///var/run/docker.sock
+    ports:
+      - "4566:4566"        # LocalStack edge port (all services)
+    volumes:
+      - "localstackdata:/var/lib/localstack"
+      # docker.sock not strictly needed for s3/sqs, but harmless; uncomment if you ever add lambdas
+      # - "/var/run/docker.sock:/var/run/docker.sock"
+
+volumes:
+  dbdata:
+  localstackdata:

@@ -1,0 +1,7 @@
+{
+  "scripts": {
+    "api:build": "docker compose build api",
+    "api:up": "docker compose up -d api",
+    "api:logs": "docker logs -f vtaas_api"
+  }
+}

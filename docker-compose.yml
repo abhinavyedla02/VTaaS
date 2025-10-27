@@ -33,6 +33,22 @@ services:
       # docker.sock not strictly needed for s3/sqs, but harmless; uncomment if you ever add lambdas
       # - "/var/run/docker.sock:/var/run/docker.sock"
 
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    image: vtaas-api:dev
+    container_name: vtaas_api
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+    restart: unless-stopped
+
+
 volumes:
   dbdata:
   localstackdata:

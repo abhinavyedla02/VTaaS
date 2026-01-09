@@ -9,6 +9,11 @@ dist
 # OS
 .DS_Store
 
-# Env
+# private planning notes (keep out of public repo)
+docs/private/
+notes/
+
+# local env
 .env
 .env.*
+*.log

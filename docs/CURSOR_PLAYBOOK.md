@@ -1,0 +1,121 @@
+# Cursor Playbook (VTaaS)
+
+## Purpose
+This file defines how AI assistance is allowed to operate on this repository. The goal is to maximize velocity **without** sacrificing correctness, scope control, or reviewability.
+
+Cursor is a tool. Git is the guardrail. The human is responsible for final decisions.
+
+---
+
+## Sources of truth (in order)
+1. The code in the repo (what exists)
+2. `docs/ARCHITECTURE.md` (system contract)
+3. `docs/DECISIONS.md` (decided choices + rationale)
+4. `docs/ROADMAP.md` (what work exists and how it’s phased)
+5. `docs/DEVELOPMENT.md` (how to run + verify)
+
+If something is not in one of these sources, it is **not a fact**.
+
+---
+
+## Operating mode (non-negotiable)
+
+### Evidence-first
+When answering questions about the repo, always reference exact files.  
+If you cannot verify something from the repository, you must say **unknown** and ask for clarification.
+
+### Plan-first (no edits)
+Before writing or modifying code, you must:
+1. Restate the goal (from the issue AC)
+2. List the exact files you will change/add
+3. Describe the minimal approach
+4. List verification commands + expected output
+5. List rollback approach
+
+No edits until the plan is provided.
+
+### Ask, don’t assume
+If any requirement is ambiguous (contract shape, naming, env var name, key format, etc.), ask.
+
+---
+
+## Diff discipline
+
+### Keep diffs small
+- Minimal changes needed to satisfy AC
+- Do not refactor unrelated code
+- Do not rename/move files unless the issue explicitly calls for it
+
+### Dependencies are frozen
+- Do not add, remove, or upgrade dependencies unless the issue explicitly requires it.
+- If you believe a dependency change is necessary, stop and ask.
+
+### One issue, one branch
+- Branch name must match the issue’s branch requirement (if provided).
+- Do not bundle multiple issues into one PR.
+
+---
+
+## Verification requirements (every PR)
+Every implementation must include:
+- Exact commands to verify locally (docker compose / curl / tests)
+- Expected output (what “success” looks like)
+- Proof artifact text to paste into PR (log line, curl output, CLI output)
+- Rollback instructions (env flag preferred when relevant)
+
+If verification cannot be performed due to missing setup, stop and ask.
+
+---
+
+## Repository facts (verified)
+- API is NestJS + Fastify.
+- Global prefix is `/api`.
+- Ports (docker compose):
+  - API: 3000
+  - Postgres: 5432
+  - LocalStack: 4566
+- Current implemented endpoint: `GET /api/health`.
+
+---
+
+## PR checklist (must be satisfied)
+- [ ] AC satisfied (explicitly checked off in PR description)
+- [ ] Proof included (copy/paste artifact)
+- [ ] Rollback documented and works
+- [ ] No unrelated changes
+- [ ] Verification commands provided
+- [ ] Any new env vars documented (name + purpose + defaults)
+
+---
+
+## Recommended prompt pattern
+
+### 1) Plan-only prompt
+"Scan the repo and propose a minimal plan for Issue X. Do not modify files. List exact files to change, verification commands, and rollback."
+
+### 2) Implement prompt
+"Implement exactly the approved plan. Minimal diff. No unrelated refactors. Summarize file-by-file changes."
+
+### 3) Self-review prompt
+"Review your diff against AC. List risks. Confirm verification steps and provide proof artifact."
+
+---
+
+## Stop conditions (ask the human)
+Stop and ask if:
+- the contract (API shape, message schema, key scheme) is unclear or conflicting
+- a dependency change would be required
+- a file rename/move would be required
+- behavior would change outside the requested scope
+- there are multiple plausible approaches and the issue does not specify which to choose
+- healthcheck tooling (curl/wget) availability is uncertain
+
+---
+
+## Healthcheck tooling rule (non-negotiable)
+**Do not assume curl/wget exists in container images for healthchecks.**
+
+- Before using `curl` or `wget` in a healthcheck, verify the tool exists in the image.
+- Prefer `CMD-SHELL` with fallbacks or use built-in tools (e.g., `pg_isready` for Postgres).
+- If a tool must be used, document the requirement and verify it exists in the base image.
+- Example: LocalStack healthcheck must not assume `curl` exists without verification.

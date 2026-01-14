@@ -32,6 +32,12 @@ services:
       - "localstackdata:/var/lib/localstack"
       # docker.sock not strictly needed for s3/sqs, but harmless; uncomment if you ever add lambdas
       # - "/var/run/docker.sock:/var/run/docker.sock"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:4566/_localstack/health').read()\" || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
 
   api:
     build:

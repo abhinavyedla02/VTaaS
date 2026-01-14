@@ -28,8 +28,6 @@ This repository is intentionally built in phases. The current implementation is 
 - IaC + staging/prod deployments
 - Structured JSON request logging
 
-### ⚠️ Known Issues
-- **LocalStack healthcheck mismatch:** The `api` service depends on `localstack` with `condition: service_healthy`, but LocalStack has no healthcheck defined in `docker-compose.yml`. This may cause the API to start before LocalStack is ready. See `docs/ROADMAP.md` Issue 1.2.1 for planned fix.
 
 ---
 

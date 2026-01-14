@@ -26,7 +26,7 @@
 - **Proof:** `docker ps` + health outputs
 - **Rollback:** remove services from compose
 
-#### 1.2.1 LocalStack healthcheck + depends_on alignment — ⬜ Planned (Required before S3/SQS usage)
+#### 1.2.1 LocalStack healthcheck + depends_on alignment — ✅ Done
 - **AC:** LocalStack becomes `healthy` and `depends_on: service_healthy` is valid. Healthcheck must not assume curl exists in the image.
 - **Proof:** compose ps shows healthy; LocalStack health endpoint responds
 - **Rollback:** revert healthcheck change

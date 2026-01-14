@@ -17,3 +17,6 @@ notes/
 .env
 .env.*
 *.log
+
+
+.cursor/

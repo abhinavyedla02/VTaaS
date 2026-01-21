@@ -8,7 +8,7 @@ This repository is intentionally built in phases. The current implementation is 
 
 ## Current State
 
-### ✅ Implemented
+### Implemented
 - **Docker Compose services:**
   - PostgreSQL (`db`) on port 5432
   - LocalStack (`localstack`) on port 4566 with S3 + SQS services enabled
@@ -22,7 +22,7 @@ This repository is intentionally built in phases. The current implementation is 
   - NestJS with Fastify adapter
   - Global route prefix: `/api`
 
-### ⬜ Planned (not implemented yet)
+### Planned (not implemented yet)
 - Job model + database migrations (Postgres)
 - Presigned uploads to S3 (LocalStack)
 - Job creation + enqueue to SQS (LocalStack)

@@ -37,7 +37,7 @@
 - **Proof:** curl + container logs
 - **Rollback:** remove api service/Dockerfile
 
-#### 1.4 JSON request logging — ⬜ Next (not implemented)
+#### 1.4 JSON request logging — ✅ Done
 - **AC:** hitting `/api/health` prints one structured JSON log line
 - **Proof:** paste one log line in PR
 - **Rollback:** disable middleware behind env flag

@@ -54,6 +54,18 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    image: vtaas-web:dev
+    container_name: vtaas_web
+    ports:
+      - "5173:5173"
+    depends_on:
+      - api
+    restart: unless-stopped
+
 
 volumes:
   dbdata:

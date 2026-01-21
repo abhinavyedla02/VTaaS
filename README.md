@@ -13,8 +13,11 @@ This repository is intentionally built in phases. The current implementation is 
   - PostgreSQL (`db`) on port 5432
   - LocalStack (`localstack`) on port 4566 with S3 + SQS services enabled
   - NestJS API (`api`) on port 3000
+  - React Web UI (`web`) on port 5173
 - **API endpoint:**
   - `GET /api/health` → `{"status":"ok"}`
+- **Web endpoint:**
+  - `http://localhost:5173` → React app with health check
 - **API technology:**
   - NestJS with Fastify adapter
   - Global route prefix: `/api`
@@ -24,7 +27,6 @@ This repository is intentionally built in phases. The current implementation is 
 - Presigned uploads to S3 (LocalStack)
 - Job creation + enqueue to SQS (LocalStack)
 - Worker service (ffmpeg consumer)
-- Web UI (React)
 - IaC + staging/prod deployments
 - Structured JSON request logging
 
@@ -35,7 +37,7 @@ This repository is intentionally built in phases. The current implementation is 
 
 - `api/` — NestJS backend (Fastify adapter). Currently only provides `GET /api/health`. **Real implementation.**
 - `worker/` — Worker service (planned). Will consume SQS jobs and run ffmpeg. **Empty placeholder.**
-- `web/` — React frontend (planned). Will upload and poll job status. **Empty placeholder.**
+- `web/` — React frontend with Vite. Currently shows health check status. **Implemented.**
 - `infra/` — Infrastructure as code (planned). Tool TBD (Terraform or CDK). **Empty placeholder.**
 - `docs/` — Project documentation (architecture, roadmap, development, decisions, AI playbook).
 
@@ -57,6 +59,14 @@ docker compose up
 ```bash
 # Check API health endpoint
 curl http://localhost:3000/api/health
+# Expected: {"status":"ok"}
+
+# Check web service
+curl http://localhost:5173
+# Expected: Returns HTML page
+
+# Check web health check proxy
+curl http://localhost:5173/api/health
 # Expected: {"status":"ok"}
 
 # Check LocalStack health (if healthcheck is added)

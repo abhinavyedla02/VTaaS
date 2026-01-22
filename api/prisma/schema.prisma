@@ -9,3 +9,26 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+enum JobStatus {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  FAILED
+}
+
+model Job {
+  id           String    @id @default(uuid())
+  userId       String    @map("user_id")
+  requestId    String?   @map("request_id")
+  status       JobStatus @default(PENDING)
+  inputKey     String    @map("input_key")
+  outputKeys   Json?     @map("output_keys")
+  error        String?   @map("error")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  @@map("jobs")
+}
+
+

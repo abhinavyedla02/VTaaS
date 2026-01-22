@@ -55,29 +55,56 @@
 - **Goal:** DB-backed job lifecycle with idempotency.
 - **Key decision:** `user_id` is NOT NULL in Phase 0 (dev stub).
 
-#### 2.1 ORM + migration tooling — ⬜ Planned
+#### 2.1 ORM + migration tooling — ✅ Done
 - **AC:** ORM (e.g., Prisma, TypeORM, or Drizzle) installed and configured; migration CLI works; can connect to Postgres in Docker Compose
 - **Proof:** `npm run migrate:status` (or equivalent) shows connection success; empty migration list
 - **Rollback:** remove ORM package + config files
 
 #### 2.2 Define Job schema + migrations — ⬜ Planned
-- **AC:** `jobs` table exists with columns: `id` (uuid PK), `user_id` (NOT NULL), `status` (text), `input_key` (text), `output_keys` (jsonb nullable), `error` (text nullable), `created_at`, `updated_at`
+- **Git Branch:** `feat/issue-2.2-schema`
+- **Work:**
+  1. Add `Job` model to `schema.prisma` with `requestId` (String?)
+  2. Use `String[]` for `output_keys` (simpler than JSONB for Phase 0)
+  3. Run `npx prisma migrate dev --name init_jobs`
+- **Commit:** `feat: define job schema and migration`
+- **Push:** `feat/issue-2.2-schema`
+- **AC:** `jobs` table exists with columns: `id`, `user_id`, `request_id`, `status`, `input_key`, `output_keys` (text array), `error`, `created_at`, `updated_at`
 - **Proof:** `docker compose exec db psql -U vtaas -c "\d jobs"` shows table schema
 - **Rollback:** run down migration or drop table
 
 #### 2.3 Unique `(user_id, input_key)` constraint — ⬜ Planned
-- **AC:** unique constraint on `(user_id, input_key)` exists; duplicate insert fails with constraint violation
+- **Git Branch:** `feat/issue-2.3-unique-constraint`
+- **Work:**
+  1. Add named constraint `@@unique([userId, inputKey], name: "user_input_unique")`
+  2. Run `npx prisma migrate dev --name unique_user_input`
+- **Commit:** `feat: add named unique constraint to jobs`
+- **Push:** `feat/issue-2.3-unique-constraint`
+- **AC:** unique constraint `user_input_unique` exists; duplicate insert fails
 - **Proof:** attempt duplicate insert via psql → error message shows constraint name
 - **Rollback:** drop constraint via migration
 
 #### 2.4 Type-safe status + transition helper — ⬜ Planned
-- **AC:** `JobStatus` enum/type defined in code; helper function `transitionStatus(job, newStatus)` validates allowed transitions (`PENDING→PROCESSING→SUCCEEDED|FAILED`)
-- **Proof:** unit test covers valid + invalid transitions
+- **Git Branch:** `feat/issue-2.4-status-helper`
+- **Work:**
+  1. Implement `transitionStatus` that acts as the **only** setter
+  2. Throw `DomainException` (or NestJS `BadRequestException`) on invalid transition
+  3. Valid: `PENDING->PROCESSING`, `PROCESSING->SUCCEEDED|FAILED`
+- **Commit:** `feat: add strict status transition logic`
+- **Push:** `feat/issue-2.4-status-helper`
+- **AC:** Helper prevents invalid transitions with specific exception logic
+- **Proof:** unit test verifies `PROCESSING -> PENDING` throws exception
 - **Rollback:** revert PR
 
 #### 2.5 Dev user resolver — ⬜ Planned
-- **AC:** middleware or service resolves `user_id` from env var `DEV_USER_ID` (default: fixed UUID); all job creation uses this resolver
-- **Proof:** create job via API → job row has expected `user_id`
+- **Git Branch:** `feat/issue-2.5-dev-user`
+- **Work:**
+  1. Implement `UserInterceptor`: `x-user-id` -> `DEV_USER_ID` -> "LocalDevUser" (log warning)
+  2. Implement custom `@User()` decorator
+  3. Controller uses `@User() userId: string`
+- **Commit:** `feat: add user interceptor and decorator`
+- **Push:** `feat/issue-2.5-dev-user`
+- **AC:** Decorator correctly resolves ID and handles fallback
+- **Proof:** curl without header -> gets default; curl with header -> gets header
 - **Rollback:** remove resolver; job creation fails until auth exists
 
 ---

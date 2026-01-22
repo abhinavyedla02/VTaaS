@@ -42,7 +42,7 @@
 - **Proof:** paste one log line in PR
 - **Rollback:** disable middleware behind env flag
 
-#### 1.5 Web placeholder (optional) — ⬜ Planned (Recommended)
+#### 1.5 Web placeholder (optional) — ✅ Done
 - **AC:** `http://localhost:5173` loads and can call `GET /api/health` from the browser
 - **Proof:** screenshot/network success
 - **Rollback:** remove web service
@@ -55,12 +55,30 @@
 - **Goal:** DB-backed job lifecycle with idempotency.
 - **Key decision:** `user_id` is NOT NULL in Phase 0 (dev stub).
 
-Sub-issues (planned):
-- 2.1 ORM + migration tooling
-- 2.2 Define Job schema + migrations
-- 2.3 Unique `(user_id, input_key)` constraint (idempotency v1)
-- 2.4 Type-safe status + transition helper
-- 2.5 Dev user resolver (ensures non-null user_id)
+#### 2.1 ORM + migration tooling — ⬜ Planned
+- **AC:** ORM (e.g., Prisma, TypeORM, or Drizzle) installed and configured; migration CLI works; can connect to Postgres in Docker Compose
+- **Proof:** `npm run migrate:status` (or equivalent) shows connection success; empty migration list
+- **Rollback:** remove ORM package + config files
+
+#### 2.2 Define Job schema + migrations — ⬜ Planned
+- **AC:** `jobs` table exists with columns: `id` (uuid PK), `user_id` (NOT NULL), `status` (text), `input_key` (text), `output_keys` (jsonb nullable), `error` (text nullable), `created_at`, `updated_at`
+- **Proof:** `docker compose exec db psql -U vtaas -c "\d jobs"` shows table schema
+- **Rollback:** run down migration or drop table
+
+#### 2.3 Unique `(user_id, input_key)` constraint — ⬜ Planned
+- **AC:** unique constraint on `(user_id, input_key)` exists; duplicate insert fails with constraint violation
+- **Proof:** attempt duplicate insert via psql → error message shows constraint name
+- **Rollback:** drop constraint via migration
+
+#### 2.4 Type-safe status + transition helper — ⬜ Planned
+- **AC:** `JobStatus` enum/type defined in code; helper function `transitionStatus(job, newStatus)` validates allowed transitions (`PENDING→PROCESSING→SUCCEEDED|FAILED`)
+- **Proof:** unit test covers valid + invalid transitions
+- **Rollback:** revert PR
+
+#### 2.5 Dev user resolver — ⬜ Planned
+- **AC:** middleware or service resolves `user_id` from env var `DEV_USER_ID` (default: fixed UUID); all job creation uses this resolver
+- **Proof:** create job via API → job row has expected `user_id`
+- **Rollback:** remove resolver; job creation fails until auth exists
 
 ---
 

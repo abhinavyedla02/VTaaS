@@ -60,7 +60,7 @@
 - **Proof:** `npm run migrate:status` (or equivalent) shows connection success; empty migration list
 - **Rollback:** remove ORM package + config files
 
-#### 2.2 Define Job schema + migrations — ⬜ Planned
+#### 2.2 Define Job schema + migrations — ✅ Done
 - **Git Branch:** `feat/issue-2.2-schema`
 - **Work:**
   1. Add `Job` model to `schema.prisma` with `requestId` (String?)

@@ -72,7 +72,7 @@
 - **Proof:** `docker compose exec db psql -U vtaas -c "\d jobs"` shows table schema
 - **Rollback:** run down migration or drop table
 
-#### 2.3 Unique `(user_id, input_key)` constraint — ⬜ Planned
+#### 2.3 Unique `(user_id, input_key)` constraint — ✅ Done
 - **Git Branch:** `feat/issue-2.3-unique-constraint`
 - **Work:**
   1. Add named constraint `@@unique([userId, inputKey], name: "user_input_unique")`
@@ -83,7 +83,7 @@
 - **Proof:** attempt duplicate insert via psql → error message shows constraint name
 - **Rollback:** drop constraint via migration
 
-#### 2.3.1 DomainException base class — ⬜ Planned
+#### 2.3.1 DomainException base class — ✅ Done
 - **Git Branch:** `feat/issue-2.3.1-domain-exception`
 - **Work:**
   1. Create `api/src/common/exceptions/domain.exception.ts` extending `HttpException`

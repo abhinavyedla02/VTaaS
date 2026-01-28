@@ -1,11 +1,13 @@
 # VTaaS Architecture
 
 ## Status
-- **Implemented today**
+- **Implemented**
   - `api/`: NestJS + Fastify, `GET /api/health` returns `{"status":"ok"}`
-  - `docker-compose.yml`: `db` (Postgres), `localstack` (S3+SQS), `api` (NestJS)
+  - `docker-compose.yml`: `db` (Postgres), `localstack` (S3+SQS), `api`, `web`
+  - Prisma ORM with `jobs` table and migrations
+  - `DomainException` base class for typed error codes
+  - Jest testing infrastructure
 - **Planned (Phase 0 pipeline)**
-  - `web/`: React UI (placeholder)
   - `worker/`: ffmpeg consumer (placeholder)
   - `infra/`: IaC (placeholder)
 
@@ -108,19 +110,25 @@ VTaaS (Video Transcode as a Service) is a queue-driven media pipeline. The syste
 - API creates job row in `PENDING`
 - Worker transitions the job into `PROCESSING` and then `SUCCEEDED/FAILED`
 
-### Jobs table (v0 fields)
-Planned columns:
-- `id` (uuid)
-- `user_id` (NOT NULL in Phase 0; dev stub)
-- `status` (enum/string)
-- `input_key` (text)
-- `output_keys` (jsonb) OR equivalent representation
-- `error` (text nullable)
-- `created_at`, `updated_at`
+### Jobs table (implemented)
 
-**Idempotency rule (v1, Phase 0):**
-- Unique `(user_id, input_key)`
-- Duplicate create must return the existing job and must not enqueue again
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | uuid | PK, auto-generated |
+| `user_id` | text | NOT NULL (dev stub in Phase 0) |
+| `request_id` | text | nullable |
+| `status` | enum | `PENDING`, `PROCESSING`, `SUCCEEDED`, `FAILED` |
+| `input_key` | text | S3 key for input file |
+| `output_keys` | jsonb | nullable, output file references |
+| `error` | text | nullable, error message |
+| `created_at` | timestamp | auto |
+| `updated_at` | timestamp | auto |
+
+**Constraints:**
+- Unique `(user_id, input_key)` for idempotency
+
+**Exception handling:**
+- `DomainException` for domain-specific errors with typed codes
 
 ---
 

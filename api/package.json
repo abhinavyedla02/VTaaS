@@ -26,5 +26,18 @@
     "prisma": "^6.0.0",
     "ts-jest": "^29.4.6",
     "typescript": "^5.4.0"
+  },
+  "jest": {
+    "moduleFileExtensions": [
+      "js",
+      "json",
+      "ts"
+    ],
+    "rootDir": "src",
+    "testRegex": ".*\\.spec\\.ts$",
+    "transform": {
+      "^.+\\.(t|j)s$": "ts-jest"
+    },
+    "testEnvironment": "node"
   }
 }

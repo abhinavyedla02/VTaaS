@@ -28,6 +28,7 @@ model Job {
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
 
+  @@unique([userId, inputKey], name: "user_input_unique")
   @@map("jobs")
 }
 

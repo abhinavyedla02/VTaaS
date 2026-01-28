@@ -83,7 +83,7 @@
 - **Proof:** attempt duplicate insert via psql → error message shows constraint name
 - **Rollback:** drop constraint via migration
 
-#### 2.3.1 DomainException base class — ⬜ Planned
+#### 2.3.1 DomainException base class — ✅ Done
 - **Git Branch:** `feat/issue-2.3.1-domain-exception`
 - **Work:**
   1. Create `api/src/common/exceptions/domain.exception.ts` extending `HttpException`

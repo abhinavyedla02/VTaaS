@@ -14,21 +14,25 @@ This repository is intentionally built in phases. The current implementation is 
   - LocalStack (`localstack`) on port 4566 with S3 + SQS services enabled
   - NestJS API (`api`) on port 3000
   - React Web UI (`web`) on port 5173
-- **API endpoint:**
+- **API health endpoint:**
   - `GET /api/health` → `{"status":"ok"}`
-- **Web endpoint:**
-  - `http://localhost:5173` → React app with health check
+- **Database (Prisma ORM):**
+  - `jobs` table with status enum (`PENDING`, `PROCESSING`, `SUCCEEDED`, `FAILED`)
+  - Unique constraint on `(user_id, input_key)` for idempotency
+- **Exception handling:**
+  - `DomainException` base class with typed error codes
+- **Testing:**
+  - Jest with inline config in `package.json`
+  - `npm test` to run specs
 - **API technology:**
-  - NestJS with Fastify adapter
+  - NestJS with Fastify adapter  
   - Global route prefix: `/api`
 
 ### Planned (not implemented yet)
-- Job model + database migrations (Postgres)
 - Presigned uploads to S3 (LocalStack)
 - Job creation + enqueue to SQS (LocalStack)
 - Worker service (ffmpeg consumer)
 - IaC + staging/prod deployments
-- Structured JSON request logging
 
 
 ---

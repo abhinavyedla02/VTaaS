@@ -64,7 +64,7 @@
 - **Git Branch:** `feat/issue-2.2-schema`
 - **Work:**
   1. Add `Job` model to `schema.prisma` with `requestId` (String?)
-  2. Use `String[]` for `output_keys` (simpler than JSONB for Phase 0)
+  2. Use `String[]` for `output_keys` (simpler than JSONB for Phase 0) - EDIT: will be keeping as JSON. we might need the metadata for other purposes.
   3. Run `npx prisma migrate dev --name init_jobs`
 - **Commit:** `feat: define job schema and migration`
 - **Push:** `feat/issue-2.2-schema`
@@ -82,6 +82,18 @@
 - **AC:** unique constraint `user_input_unique` exists; duplicate insert fails
 - **Proof:** attempt duplicate insert via psql → error message shows constraint name
 - **Rollback:** drop constraint via migration
+
+#### 2.3.1 DomainException base class — ⬜ Planned
+- **Git Branch:** `feat/issue-2.3.1-domain-exception`
+- **Work:**
+  1. Create `api/src/common/exceptions/domain.exception.ts` extending `HttpException`
+  2. Add typed error code support (`code: string` field for downstream consumers)
+  3. Export from `api/src/common/exceptions/index.ts`
+- **Commit:** `feat: add DomainException base class`
+- **Push:** `feat/issue-2.3.1-domain-exception`
+- **AC:** `DomainException` can be thrown with a code and message; inherits HTTP semantics
+- **Proof:** unit test shows `throw new DomainException('INVALID_TRANSITION', 'msg')` works
+- **Rollback:** revert PR
 
 #### 2.4 Type-safe status + transition helper — ⬜ Planned
 - **Git Branch:** `feat/issue-2.4-status-helper`

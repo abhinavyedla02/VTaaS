@@ -107,7 +107,7 @@
 - **Proof:** unit test verifies `PROCESSING -> PENDING` throws exception
 - **Rollback:** revert PR
 
-#### 2.5 Dev user resolver — ⬜ Planned
+#### 2.5 Dev user resolver — ✅ Done
 - **Git Branch:** `feat/issue-2.5-dev-user`
 - **Work:**
   1. Implement `UserInterceptor`: `x-user-id` -> `DEV_USER_ID` -> "LocalDevUser" (log warning)

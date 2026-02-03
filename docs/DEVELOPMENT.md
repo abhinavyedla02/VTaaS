@@ -4,6 +4,7 @@
 - Docker (Docker Desktop or equivalent)
 - Node.js 20 (this repo is pinned to Node 20)
 - curl (for quick endpoint checks)
+- awslocal CLI (for LocalStack debugging: `pip install awscli-local`)
 
 ---
 
@@ -60,6 +61,19 @@ docker compose down
 # Stop and remove volumes (clean slate)
 docker compose down -v
 ```
+
+---
+
+## Environment Variables
+
+| Variable | Purpose | Default |
+|----------|---------|---------|
+| `DEV_USER_ID` | Override default user ID for dev | (none, falls back to `LocalDevUser`) |
+| `REQUEST_LOGGING_ENABLED` | Enable/disable JSON request logs | `true` |
+| `MAX_UPLOAD_SIZE_BYTES` | Max file size for uploads | `524288000` (500MB) |
+| `UPLOAD_EXPIRY_SECONDS` | Presigned URL expiry time | `900` (15min) |
+| `AWS_ENDPOINT_URL` | LocalStack endpoint | `http://localstack:4566` (Docker) |
+| `AWS_REGION` | AWS region for S3 client | `us-east-1` |
 
 ---
 

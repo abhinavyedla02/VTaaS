@@ -84,8 +84,8 @@ VTaaS (Video Transcode as a Service) is a queue-driven media pipeline. The syste
 ### Object Storage (S3 via LocalStack in Phase 0)
 **Port:** 4566 (LocalStack edge port)  
 **Buckets (Phase 0 plan):**
-- `vtaas-input`
-- `vtaas-output`
+- `vtaas-inputs`
+- `vtaas-outputs` (created by Worker in Issue 5)
 
 **Key scheme (Phase 0 plan, locked):**
 - Inputs: `inputs/{uuid}.{ext}`

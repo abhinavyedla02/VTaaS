@@ -78,3 +78,34 @@
 - **Optional behavior:** If client sends `x-request-id` header, use it as `requestId`; otherwise generate UUID.
 - **Rationale:** Structured logs enable parsing and observability. Minimal schema for Phase 0.
 - **Consequence:** All request logs must include these exact fields. Implementation must use this schema. See `docs/ARCHITECTURE.md` API section for reference.
+
+---
+
+## D-009: Mime type allowlist and extension mapping
+- **Status:** Decided
+- **Allowlist (Phase 0):**
+  | Mime Type | Extension |
+  |-----------|-----------|
+  | `video/mp4` | `mp4` |
+  | `video/quicktime` | `mov` |
+  | `video/webm` | `webm` |
+- **Rationale:** Strict allowlist prevents unexpected file types; mapping ensures consistent S3 key extensions.
+- **Consequence:** 
+  - API rejects upload requests with unsupported mime types (`UNSUPPORTED_MIME_TYPE` error code)
+  - Worker can expect only these extensions in input keys
+  - Expand allowlist via PR when needed
+
+---
+
+## D-010: Upload size and URL expiry limits
+- **Status:** Decided
+- **Limits (Phase 0):**
+  | Limit | Env Var | Default |
+  |-------|---------|---------|
+  | Max file size | `MAX_UPLOAD_SIZE_BYTES` | `524288000` (500MB) |
+  | Presigned URL expiry | `UPLOAD_EXPIRY_SECONDS` | `900` (15min) |
+- **Rationale:** Reasonable defaults for local dev; configurable for staging/prod.
+- **Consequence:**
+  - API rejects upload requests exceeding size limit (`FILE_TOO_LARGE` error code)
+  - Presigned URLs expire after configured duration
+  - HEAD check before job creation verifies actual uploaded size

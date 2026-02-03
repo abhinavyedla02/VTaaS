@@ -123,16 +123,103 @@
 
 ### ISSUE-3: Presigned Upload (LocalStack S3)
 - **Goal:** Browser uploads directly to object storage using presigned PUT.
-- **Key decision:** presigned PUT in Phase 0; content-type enforced; size validated at issuance and verified via HEAD before job creation/enqueue.
+- **Key decisions:**
+  - Presigned PUT (not POST) for simplicity
+  - Strict mime type allowlist (`video/mp4`, `video/quicktime`, `video/webm`)
+  - Size validated at URL issuance + verified via HEAD before job creation
+  - Bucket created via `onModuleInit` (idempotent, TypeScript-visible)
 
-Sub-issues (planned):
-- 3.1 Buckets + SDK client config (LocalStack)
-- 3.1.1 Bucket CORS for browser PUT (dev)
-- 3.2 Upload route stub (501)
-- 3.3 Presign PUT URL returns `{ url, inputKey, headers }`
-- 3.4 Validation & limits (allowed mime types + max size)
-- 3.5 Integration tests: presign -> PUT -> HEAD
-- 3.6 Optional web upload MVP (after API endpoints exist)
+#### 3.1 S3 Infrastructure — ⬜ Planned
+- **Git Branch:** `feat/issue-3.1-s3-infra`
+- **Work:**
+  1. Create `S3Module` with configured client (path-style, LocalStack endpoint)
+  2. `onModuleInit`: create `vtaas-inputs` bucket if missing (headBucket → createBucket)
+  3. Apply CORS rules (allow PUT/GET/HEAD from `*` for dev)
+  4. Export `S3Service` for use by upload module
+- **Commit:** `feat: add S3 module with bucket init and CORS`
+- **Push:** `feat/issue-3.1-s3-infra`
+- **AC:** App starts, logs "Bucket initialized", `awslocal s3 ls` shows `vtaas-inputs`
+- **Proof:** Startup logs + `awslocal s3 ls` output
+- **Rollback:** Remove S3Module; app starts without S3 connectivity
+
+#### 3.2 Presigned Upload Endpoint
+
+##### 3.2.1 Upload Validation Logic — ⬜ Planned
+- **Git Branch:** `feat/issue-3.2.1-upload-validation`
+- **Work:**
+  1. Create `api/src/uploads/upload.rules.ts` with pure validation functions
+  2. Mime type allowlist map: `video/mp4` → `mp4`, `video/quicktime` → `mov`, `video/webm` → `webm`
+  3. `validateMimeType(mimeType)` → returns extension or throws `DomainException` (`UNSUPPORTED_MIME_TYPE`)
+  4. `validateSize(sizeBytes)` → throws `DomainException` (`FILE_TOO_LARGE`) if > `MAX_UPLOAD_SIZE_BYTES`
+  5. Unit tests for all validation paths
+- **Commit:** `feat: add upload validation logic`
+- **AC:** Unit tests pass; validation functions correctly accept/reject inputs
+- **Proof:** Test output
+- **Rollback:** Remove `upload.rules.ts`
+
+##### 3.2.2 Upload Service Integration — ⬜ Planned
+- **Git Branch:** `feat/issue-3.2.2-upload-service`
+- **Work:**
+  1. Create `UploadsModule` and `UploadsService`
+  2. Inject `S3Service` for presigned URL generation
+  3. `generateUploadUrl(mimeType, sizeBytes)` method:
+     - Validates input using `upload.rules.ts`
+     - Generates UUID key: `inputs/{uuid}.{ext}`
+     - Calls S3 presign with expiry from `UPLOAD_EXPIRY_SECONDS`
+     - Returns `{ url, inputKey, expiresIn }`
+  4. Unit tests with mocked S3Service
+- **Commit:** `feat: add uploads service with presign logic`
+- **AC:** Service generates valid presigned URLs
+- **Proof:** Unit test output
+- **Rollback:** Remove `UploadsService`
+
+##### 3.2.3 Upload Controller Wiring — ⬜ Planned
+- **Git Branch:** `feat/issue-3.2.3-upload-controller`
+- **Work:**
+  1. Create `UploadsController` with `POST /api/uploads`
+  2. DTO: `CreateUploadDto { mimeType: string, sizeBytes: number }`
+  3. Controller calls `UploadsService.generateUploadUrl()`
+  4. Register `UploadsModule` in `AppModule`
+- **Commit:** `feat: add uploads controller and wire to app`
+- **AC:** `curl -X POST /api/uploads -d '{"mimeType":"video/mp4","sizeBytes":1000}'` returns presigned URL
+- **Proof:** curl output + `awslocal s3 ls` after PUT
+- **Rollback:** Remove controller; service remains testable
+
+---
+
+#### 3.3 HEAD Check + Integration Tests
+
+##### 3.3.1 HEAD Object Helper — ⬜ Planned
+- **Git Branch:** `feat/issue-3.3.1-head-object`
+- **Work:**
+  1. Add `headObject(key)` method to `S3Service`
+  2. Returns `{ size: number, contentType: string }` or throws if object missing
+  3. Unit test with mocked S3 client
+- **Commit:** `feat: add headObject helper to S3Service`
+- **AC:** `headObject` correctly returns metadata or throws
+- **Proof:** Unit test output
+- **Rollback:** Remove method from S3Service
+
+##### 3.3.2 Upload Integration Tests — ⬜ Planned
+- **Git Branch:** `feat/issue-3.3.2-upload-integration`
+- **Work:**
+  1. Create integration test script: presign → PUT (curl) → HEAD → verify size
+  2. Test full flow with LocalStack running
+  3. Document test commands in DEVELOPMENT.md
+- **Commit:** `feat: add upload integration tests`
+- **AC:** Integration test passes end-to-end
+- **Proof:** Test output showing full flow
+- **Rollback:** Remove test script
+
+#### 3.4 Web Upload MVP (Optional) — ⬜ Planned
+- **Git Branch:** `feat/issue-3.4-web-upload`
+- **Work:**
+  1. Simple upload form in React frontend
+  2. Calls `POST /api/uploads`, then PUTs file to returned URL
+  3. Displays success/error
+- **AC:** Browser can upload file to LocalStack via presigned URL
+- **Proof:** Screenshot or screen recording of successful upload
+- **Rollback:** Remove upload component
 
 ---
 

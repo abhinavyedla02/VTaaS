@@ -39,6 +39,26 @@ If any requirement is ambiguous (contract shape, naming, env var name, key forma
 
 ---
 
+## Architectural Standards (The "Where" & "How")
+
+### 1. Separation of Concerns
+- **Pure Logic:** Business rules (state machines, validation, calculations) go in **helper files** (e.g., `*.rules.ts`, `*.domain.ts`). These must be pure functions/classes and easy to unit test.
+- **Services:** Orchestrate I/O (Database, SQS, S3) and call Pure Logic.
+- **Controllers:** Parse HTTP input, call Services, and map responses. Do not put business logic here.
+
+### 2. File Organization
+- Feature-based folders: `api/src/features/<feature>/` (e.g., `api/src/jobs/`).
+- Shared logic: `api/src/common/`.
+- Tests: Co-located with the file (e.g., `job.rules.ts` -> `job.rules.spec.ts`).
+
+### 3. Naming Conventions
+- **Error Codes:** `SCREAMING_SNAKE_CASE` (e.g., `INVALID_JOB_TRANSITION`).
+- **Files:** `kebab-case.ts`.
+- **Classes:** `PascalCase`.
+- **Variables/Methods:** `camelCase`.
+
+---
+
 ## Diff discipline
 
 ### Keep diffs small

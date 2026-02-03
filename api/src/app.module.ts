@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { HealthController } from './health.controller';
 import { LoggingInterceptor } from './common/logging.interceptor';
+import { DevUserInterceptor } from './common/interceptors/dev-user.interceptor';
 import { PrismaModule } from './common/prisma.module';
 
 @Module({
@@ -11,6 +12,10 @@ import { PrismaModule } from './common/prisma.module';
     {
       provide: APP_INTERCEPTOR,
       useClass: LoggingInterceptor,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: DevUserInterceptor,
     },
   ],
 })

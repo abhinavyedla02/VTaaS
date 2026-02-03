@@ -95,7 +95,7 @@
 - **Proof:** unit test shows `throw new DomainException('INVALID_TRANSITION', 'msg')` works
 - **Rollback:** revert PR
 
-#### 2.4 Type-safe status + transition helper — ⬜ Planned
+#### 2.4 Type-safe status + transition helper — ✅ Done
 - **Git Branch:** `feat/issue-2.4-status-helper`
 - **Work:**
   1. Implement `transitionStatus` that acts as the **only** setter

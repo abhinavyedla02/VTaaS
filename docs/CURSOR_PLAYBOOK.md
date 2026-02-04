@@ -85,6 +85,14 @@ Every implementation must include:
 
 If verification cannot be performed due to missing setup, stop and ask.
 
+### Pre-flight check (before implementation)
+Before starting implementation that touches Docker or adds dependencies:
+1. Verify `docker compose up --build` succeeds on current branch
+2. Verify all required env vars are documented and set in docker-compose
+3. Review Dockerfile for any missing build steps (e.g., prisma generate)
+
+This catches pre-existing infrastructure gaps before they become blockers.
+
 ---
 
 ## Repository facts (verified)
@@ -118,6 +126,17 @@ If verification cannot be performed due to missing setup, stop and ask.
 
 ### 3) Self-review prompt
 "Review your diff against AC. List risks. Confirm verification steps and provide proof artifact."
+
+### 4) Implementation report (mandatory)
+After completing any implementation, provide a detailed report including:
+- **What went as planned:** Items from the plan that executed without issues
+- **Blockers encountered:** Any errors, failures, or unexpected behavior
+- **Retries and fixes:** What was attempted and how it was resolved
+- **Deviations from plan:** Any changes not in the original plan, with rationale
+- **Tech debt exposed:** Pre-existing issues surfaced during implementation
+- **Commits made:** List of commits with their purpose
+
+This transparency ensures the human understands exactly what happened and can make informed decisions about merging.
 
 ---
 

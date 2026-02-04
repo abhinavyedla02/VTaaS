@@ -129,7 +129,7 @@
   - Size validated at URL issuance + verified via HEAD before job creation
   - Bucket created via `onModuleInit` (idempotent, TypeScript-visible)
 
-#### 3.1 S3 Infrastructure — ⬜ Planned
+#### 3.1 S3 Infrastructure — ✅ Complete
 - **Git Branch:** `feat/issue-3.1-s3-infra`
 - **Work:**
   1. Create `S3Module` with configured client (path-style, LocalStack endpoint)

@@ -47,6 +47,10 @@ services:
     container_name: vtaas_api
     ports:
       - "3000:3000"
+    environment:
+      - DATABASE_URL=postgresql://vtaas:vtaas@db:5432/vtaas
+      - AWS_ENDPOINT_URL=http://localstack:4566
+      - AWS_REGION=us-east-1
     depends_on:
       db:
         condition: service_healthy

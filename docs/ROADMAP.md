@@ -157,7 +157,7 @@
 - **Proof:** Test output
 - **Rollback:** Remove `upload.rules.ts`
 
-##### 3.2.2 Upload Service Integration — ⬜ Planned
+##### 3.2.2 Upload Service Integration — ✅ Complete
 - **Git Branch:** `feat/issue-3.2.2-upload-service`
 - **Work:**
   1. Create `UploadsModule` and `UploadsService`

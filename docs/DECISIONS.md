@@ -82,7 +82,7 @@
 ---
 
 ## D-009: Mime type allowlist and extension mapping
-- **Status:** Decided
+- **Status:** Decided (implemented in `upload.rules.ts`)
 - **Allowlist (Phase 0):**
   | Mime Type | Extension |
   |-----------|-----------|
@@ -98,7 +98,7 @@
 ---
 
 ## D-010: Upload size and URL expiry limits
-- **Status:** Decided
+- **Status:** Decided (partially implemented — size validation in `upload.rules.ts`, URL expiry in 3.2.2)
 - **Limits (Phase 0):**
   | Limit | Env Var | Default |
   |-------|---------|---------|

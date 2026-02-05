@@ -144,7 +144,7 @@
 
 #### 3.2 Presigned Upload Endpoint
 
-##### 3.2.1 Upload Validation Logic — ⬜ Planned
+##### 3.2.1 Upload Validation Logic — ✅ Complete
 - **Git Branch:** `feat/issue-3.2.1-upload-validation`
 - **Work:**
   1. Create `api/src/uploads/upload.rules.ts` with pure validation functions

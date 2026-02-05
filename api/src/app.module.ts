@@ -5,9 +5,10 @@ import { LoggingInterceptor } from './common/logging.interceptor';
 import { DevUserInterceptor } from './common/interceptors/dev-user.interceptor';
 import { PrismaModule } from './common/prisma.module';
 import { S3Module } from './common/s3/s3.module';
+import { UploadsModule } from './uploads/uploads.module';
 
 @Module({
-  imports: [PrismaModule, S3Module],
+  imports: [PrismaModule, S3Module, UploadsModule],
   controllers: [HealthController],
   providers: [
     {

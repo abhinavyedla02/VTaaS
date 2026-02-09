@@ -173,7 +173,7 @@
 - **Proof:** Unit test output
 - **Rollback:** Remove `UploadsService`
 
-##### 3.2.3 Upload Controller Wiring — ⬜ Planned
+##### 3.2.3 Upload Controller Wiring — ✅ Complete
 - **Git Branch:** `feat/issue-3.2.3-upload-controller`
 - **Work:**
   1. Create `UploadsController` with `POST /api/uploads`

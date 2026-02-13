@@ -189,7 +189,7 @@
 
 #### 3.3 HEAD Check + Integration Tests
 
-##### 3.3.1 HEAD Object Helper — ⬜ Planned
+##### 3.3.1 HEAD Object Helper — ✅ Complete
 - **Git Branch:** `feat/issue-3.3.1-head-object`
 - **Work:**
   1. Add `headObject(key)` method to `S3Service`

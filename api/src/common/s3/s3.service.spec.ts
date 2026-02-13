@@ -2,9 +2,11 @@ import { S3Service } from './s3.service';
 import {
     S3Client,
     HeadBucketCommand,
+    HeadObjectCommand,
     CreateBucketCommand,
     PutBucketCorsCommand,
 } from '@aws-sdk/client-s3';
+import { DomainException } from '../exceptions';
 
 // Mock the AWS SDK
 jest.mock('@aws-sdk/client-s3', () => {
@@ -95,9 +97,49 @@ describe('S3Service', () => {
         });
     });
 
+    describe('headObject', () => {
+        it('should return size and contentType for existing object', async () => {
+            mockSend.mockResolvedValueOnce({
+                ContentLength: 50000,
+                ContentType: 'video/mp4',
+            });
+
+            const result = await service.headObject('inputs/test.mp4');
+
+            expect(result).toEqual({ size: 50000, contentType: 'video/mp4' });
+            expect(mockSend).toHaveBeenCalledWith(expect.any(HeadObjectCommand));
+        });
+
+        it('should throw OBJECT_NOT_FOUND for missing key', async () => {
+            const notFoundError = new Error('NotFound');
+            notFoundError.name = 'NotFound';
+            mockSend.mockRejectedValueOnce(notFoundError);
+
+            await expect(service.headObject('inputs/missing.mp4'))
+                .rejects.toThrow(DomainException);
+
+            try {
+                mockSend.mockRejectedValueOnce(notFoundError);
+                await service.headObject('inputs/missing.mp4');
+            } catch (e) {
+                expect((e as DomainException).code).toBe('OBJECT_NOT_FOUND');
+                expect((e as DomainException).message).toContain('inputs/missing.mp4');
+            }
+        });
+
+        it('should rethrow unexpected errors', async () => {
+            const unexpectedError = new Error('Connection refused');
+            mockSend.mockRejectedValueOnce(unexpectedError);
+
+            await expect(service.headObject('inputs/test.mp4'))
+                .rejects.toThrow('Connection refused');
+        });
+    });
+
     describe('getBucket', () => {
         it('should return the bucket name', () => {
             expect(service.getBucket()).toBe('vtaas-inputs');
         });
     });
 });
+

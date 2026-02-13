@@ -2,11 +2,18 @@ import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
 import {
     S3Client,
     HeadBucketCommand,
+    HeadObjectCommand,
     CreateBucketCommand,
     PutBucketCorsCommand,
     PutObjectCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { DomainException } from '../exceptions';
+
+export interface ObjectMetadata {
+    size: number;
+    contentType: string;
+}
 
 @Injectable()
 export class S3Service implements OnModuleInit {
@@ -82,6 +89,26 @@ export class S3Service implements OnModuleInit {
         });
 
         return getSignedUrl(this.client, command, { expiresIn });
+    }
+
+    async headObject(key: string): Promise<ObjectMetadata> {
+        try {
+            const response = await this.client.send(
+                new HeadObjectCommand({ Bucket: this.bucket, Key: key }),
+            );
+            return {
+                size: response.ContentLength ?? 0,
+                contentType: response.ContentType ?? 'unknown',
+            };
+        } catch (error: any) {
+            if (error.name === 'NotFound' || error.$metadata?.httpStatusCode === 404) {
+                throw new DomainException(
+                    'OBJECT_NOT_FOUND',
+                    `Object '${key}' not found in S3`,
+                );
+            }
+            throw error;
+        }
     }
 
     // Expose client for testing

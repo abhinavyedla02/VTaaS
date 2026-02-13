@@ -4,6 +4,7 @@
 - Docker (Docker Desktop or equivalent)
 - Node.js 20 (this repo is pinned to Node 20)
 - curl (for quick endpoint checks)
+- jq (for JSON parsing in integration tests: `brew install jq`)
 - awslocal CLI (for LocalStack debugging: `pip install awscli-local`)
 
 ---
@@ -82,3 +83,18 @@ docker compose down -v
 **Docker Compose is the supported workflow** - `fetch('/api/health')` relies on Vite proxy to `http://api:3000` (Docker DNS). This works when web runs in Docker Compose. If running `npm run dev` on host, proxy will fail unless you change the proxy target to `http://localhost:3000`.
 
 **React StrictMode in development** - In development mode, React StrictMode intentionally double-invokes effects to help catch bugs. This causes `useEffect` to run twice, resulting in 2 `/api/health` calls when the page loads. This is expected behavior and helps catch bugs. Production builds don't have this behavior.
+
+---
+
+## Integration Tests
+
+### Upload Flow (requires Docker Compose running)
+```bash
+# Start services first
+docker compose up -d
+
+# Run the upload integration test
+./scripts/test-upload-flow.sh
+```
+
+This tests the full pipeline: presign → PUT → HEAD → verify size and content type.

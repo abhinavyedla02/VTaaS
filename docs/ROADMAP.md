@@ -200,7 +200,7 @@
 - **Proof:** Unit test output
 - **Rollback:** Remove method from S3Service
 
-##### 3.3.2 Upload Integration Tests — ⬜ Planned
+##### 3.3.2 Upload Integration Tests — ✅ Complete
 - **Git Branch:** `feat/issue-3.3.2-upload-integration`
 - **Work:**
   1. Create integration test script: presign → PUT (curl) → HEAD → verify size

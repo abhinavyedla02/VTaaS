@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import UploadForm from './components/UploadForm';
 
 function App() {
   const [loading, setLoading] = useState(true);
@@ -27,11 +28,17 @@ function App() {
   }, []);
 
   return (
-    <div>
+    <div style={{ maxWidth: '800px', margin: '0 auto', padding: '2rem' }}>
       <h1>VTaaS</h1>
-      {loading && <p>Loading...</p>}
-      {error && <p>Error: {error}</p>}
-      {healthData && <pre>{healthData}</pre>}
+
+      <div style={{ marginBottom: '2rem', padding: '1rem', backgroundColor: '#f5f5f5', borderRadius: '4px' }}>
+        <h3>API Health</h3>
+        {loading && <p>Loading...</p>}
+        {error && <p style={{ color: 'red' }}>Error: {error}</p>}
+        {healthData && <pre style={{ margin: 0 }}>{healthData}</pre>}
+      </div>
+
+      <UploadForm />
     </div>
   );
 }

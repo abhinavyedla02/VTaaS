@@ -211,7 +211,7 @@
 - **Proof:** Test output showing full flow
 - **Rollback:** Remove test script
 
-#### 3.4 Web Upload MVP (Optional) — ⬜ Planned
+#### 3.4 Web Upload MVP (Optional) — ✅ Complete
 - **Git Branch:** `feat/issue-3.4-web-upload`
 - **Work:**
   1. Simple upload form in React frontend

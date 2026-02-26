@@ -14,8 +14,9 @@ This repository is intentionally built in phases. The current implementation is 
   - LocalStack (`localstack`) on port 4566 with S3 + SQS services enabled
   - NestJS API (`api`) on port 3000
   - React Web UI (`web`) on port 5173
-- **API health endpoint:**
+- **API endpoints:**
   - `GET /api/health` → `{"status":"ok"}`
+  - `POST /api/uploads` → Generates presigned URLs for direct-to-S3 uploads
 - **Database (Prisma ORM):**
   - `jobs` table with status enum (`PENDING`, `PROCESSING`, `SUCCEEDED`, `FAILED`)
   - Unique constraint on `(user_id, input_key)` for idempotency
@@ -28,8 +29,11 @@ This repository is intentionally built in phases. The current implementation is 
   - NestJS with Fastify adapter  
   - Global route prefix: `/api`
 
+- **Storage:**
+  - S3 bucket initialization and CORS configuration via LocalStack
+  - Pre-signed URL generation for secure, direct client uploads
+
 ### Planned (not implemented yet)
-- Presigned uploads to S3 (LocalStack)
 - Job creation + enqueue to SQS (LocalStack)
 - Worker service (ffmpeg consumer)
 - IaC + staging/prod deployments
@@ -39,9 +43,9 @@ This repository is intentionally built in phases. The current implementation is 
 
 ## Repository Layout
 
-- `api/` — NestJS backend (Fastify adapter). Currently only provides `GET /api/health`. **Real implementation.**
+- `api/` — NestJS backend (Fastify adapter). Provides health checks and presigned upload generation. **Implemented.**
 - `worker/` — Worker service (planned). Will consume SQS jobs and run ffmpeg. **Empty placeholder.**
-- `web/` — React frontend with Vite. Currently shows health check status. **Implemented.**
+- `web/` — React frontend with Vite. Includes an MVP upload form that pushes directly to S3. **Implemented.**
 - `infra/` — Infrastructure as code (planned). Tool TBD (Terraform or CDK). **Empty placeholder.**
 - `docs/` — Project documentation (architecture, roadmap, development, decisions, AI playbook).
 

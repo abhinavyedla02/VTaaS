@@ -2,7 +2,9 @@
 
 ## Status
 - **Implemented**
-  - `api/`: NestJS + Fastify, `GET /api/health` returns `{"status":"ok"}`
+  - `api/`: NestJS + Fastify, `GET /api/health` and `POST /api/uploads`
+  - S3 integration via LocalStack (bucket creation, CORS, presigned URLs)
+  - `web/`: React frontend with direct-to-S3 upload MVP
   - `docker-compose.yml`: `db` (Postgres), `localstack` (S3+SQS), `api`, `web`
   - Prisma ORM with `jobs` table and migrations
   - `DomainException` base class for typed error codes
@@ -31,7 +33,7 @@ VTaaS (Video Transcode as a Service) is a queue-driven media pipeline. The syste
 ### API (`api/`)
 **Tech:** NestJS + Fastify  
 **Port:** 3000  
-**Current state:** only `GET /api/health`
+**Current state:** Health check (`GET /api/health`) and presigned uploads (`POST /api/uploads`)
 
 **Responsibilities (Phase 0):**
 - Issue presigned upload URLs for input videos
@@ -65,8 +67,8 @@ VTaaS (Video Transcode as a Service) is a queue-driven media pipeline. The syste
 ---
 
 ### Web (`web/`)
-**Tech:** React (planned)  
-**Current state:** placeholder
+**Tech:** React + Vite  
+**Current state:** API health monitoring and S3 Video Upload MVP
 
 **Responsibilities (Phase 0):**
 - Call API endpoints to request presigned upload + create jobs
@@ -136,11 +138,11 @@ VTaaS (Video Transcode as a Service) is a queue-driven media pipeline. The syste
 
 ### Implemented endpoints (today)
 - `GET /api/health` -> `{"status":"ok"}`
-
-### Planned endpoints (Phase 0)
 - `POST /api/uploads`
   - Input: `{ mimeType, sizeBytes }`
-  - Output: `{ url, inputKey, headers }` (presigned PUT)
+  - Output: `{ url, inputKey, expiresIn }` (presigned PUT)
+
+### Planned endpoints (Phase 0)
 - `POST /api/jobs`
   - Input: `{ inputKey }`
   - Output: `{ id, status }`

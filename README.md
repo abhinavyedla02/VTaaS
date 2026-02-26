@@ -1,8 +1,27 @@
 # VTaaS (Video Transcode as a Service)
 
-VTaaS is a local-first, queue-driven video transcoding playground built to practice real-world software engineering: small issues, clean PRs, tests, observability, and (later) cloud deployment.
+VTaaS is a local-first, queue-driven video transcoding playground. 
 
-This repository is intentionally built in phases. The current implementation is minimal but runnable.
+## What does it do?
+It is an API and Web UI that allows users to upload raw video files and asynchronously process them into different formats or resolutions (e.g., transcoding a massive 4K `.mov` into web-optimized 720p `.mp4` files). 
+
+The flow is designed to mimic a real-world media pipeline:
+1. **Upload**: The client requests a secure upload URL and pushes the massive video file directly to Storage (S3), bypassing the API.
+2. **Orchestrate**: The API logs a job in the database and drops a message into a Queue (SQS).
+3. **Transcode**: A background Worker consumes the queue message, pulls the video, runs `ffmpeg` to transcode it, and uploads the results.
+4. **Serve**: The user polls the API for status updates and downloads the finished files.
+
+## Why build this?
+Most side projects are simple CRUD apps (Create, Read, Update, Delete) where the API does all the work synchronously. Real-world systems are rarely that simple. 
+
+VTaaS is built to practice **"production-lite" architecture**. It forces us to solve complex engineering challenges that you only see in distributed systems:
+- **Asynchronous Processing**: Dealing with long-running tasks that can't block an HTTP request.
+- **Event-Driven Architecture**: Service-to-service communication via SQS queues.
+- **State Machines**: Tracking job states (`PENDING` -> `PROCESSING` -> `SUCCEEDED`).
+- **Idempotency & Retries**: Ensuring that if a worker crashes halfway through a transcode, the system recovers gracefully without duplicating work.
+- **Local Cloud Simulation**: Using `LocalStack` to locally simulate AWS S3 and SQS without spending money or dealing with IAM roles during development.
+
+This repository is intentionally built in phases to practice disciplined, real-world software engineering: small issues, clean PRs, unit/integration tests, and robust boundaries.
 
 ---
 

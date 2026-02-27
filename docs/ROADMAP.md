@@ -297,3 +297,39 @@ Planned areas:
 - HLS packaging + multi-profile ladder
 - Cost controls (lifecycle policies, budgets/alarms)
 - Deployment safety (blue/green/canary, rollback automation)
+
+---
+
+### ISSUE-6: Public Portfolio Readiness
+*Make the application safe, cost-effective, and resilient for the open internet.*
+
+- **Goal:** Prepare VTaaS for public deployment as an interactive portfolio piece without risking massive infrastructure bills, abuse, or infinite storage growth.
+
+#### 6.1 Strict Resource Limits — ⬜ Planned
+- **Work:** 
+  1. Configure `MAX_UPLOAD_SIZE_BYTES` to a strict maximum (e.g., 20MB).
+  2. Implement video duration extraction (using `ffprobe` in the worker or a fast header parser in the API) to reject files longer than 30 or 60 seconds.
+  3. Hardcode maximum allowed resolutions (e.g., 720p max) to cap transcoding compute time.
+
+#### 6.2 API Rate Limiting — ⬜ Planned
+- **Work:**
+  1. Install and configure `@nestjs/throttler`.
+  2. Apply strict IP-based rate limits to `POST /api/uploads` (e.g., 5 uploads per hour per IP).
+  3. Apply limits to `POST /api/jobs` to prevent SQS queue spamming and compute exhaustion.
+
+#### 6.3 Ephemeral Data Cleanup (Garbage Collection) — ⬜ Planned
+- **Work:**
+  1. Implement a scheduled task/cron job (using `@nestjs/schedule` or an AWS EventBridge rule).
+  2. The cron job runs hourly to permanently delete inputs and outputs from S3 that are older than 2 hours.
+  3. The cron job purges job records from the PostgreSQL database that are older than 2 hours to keep the free-tier database tiny.
+
+#### 6.4 Security Headers & CORS Lockdown — ⬜ Planned
+- **Work:**
+  1. Configure `@nestjs/helmet` for API security headers.
+  2. Lock down CORS origins on both the NestJS API and the S3 bucket configuration to only allow requests from the production frontend domain.
+
+#### 6.5 Interactive "Try Me" Demo File — ⬜ Planned
+- **Work:**
+  1. Create a prominent "Try Me" button on the React frontend.
+  2. Clicking the button bypasses the local file picker and instead uses a pre-packaged, short (5-second), highly optimized `.mp4` file bundled with the frontend code.
+  3. This ensures visitors can test the pipeline instantly without needing to find and upload their own compliant video file.

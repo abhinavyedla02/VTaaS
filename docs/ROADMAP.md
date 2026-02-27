@@ -334,49 +334,14 @@ Planned areas:
   2. Clicking the button bypasses the local file picker and instead uses a pre-packaged, short (5-second), highly optimized `.mp4` file bundled with the frontend code.
   3. This ensures visitors can test the pipeline instantly without needing to find and upload their own compliant video file.
 
----
 
 ### Phase 7: AI Video Upscaling (Python/GPU Worker)
 *Introduce a high-value AI compute tier.*
-
-- **Goal:** Add AI upscaling capabilities to the transcode pipeline to offer premium video enhancements.
-
-#### 7.1 Job Type Routing & Definitions — ⬜ Planned
-- **Work:**
-  1. Add a `jobType` column to the PostgreSQL `jobs` table to distinguish between `STANDARD` (ffmpeg) and `AI_UPSCALING` (Python).
-  2. Update the `CreateJobDto` to accept the requested job type.
-  3. Modify the API's SQS message payload to include the job type so workers know how to handle the message.
-  4. Optionally create a dedicated SQS queue (`ai-jobs`) so fast standard transcode jobs aren't blocked by slow, long-running AI jobs.
-
-#### 7.2 Python AI Worker (PyTorch/Real-ESRGAN) — ⬜ Planned
-- **Work:**
-  1. Build a new containerized Python worker.
-  2. The worker pulls messages from SQS, downloads the input from S3, and extracts frames using `ffmpeg-python`.
-  3. Process the frames through an AI upscaler like Real-ESRGAN (via PyTorch) to produce 1080p/4K results.
-  4. Stitch the frames back together, upload the highly enhanced result to S3, and update the Postgres database.
-
----
+* [ ] **Issue 7.1:** Add `jobType` (Standard vs. AI) to the database and SQS payload.
+* [ ] **Issue 7.2:** Build a Python worker (PyTorch/Real-ESRGAN) to consume AI jobs from the SQS queue, process frames, and upload the 1080p result to S3.
 
 ### Phase 8: SaaS Monetization (Stripe Integration)
 *Offset GPU costs by charging for AI upscaling.*
-
-- **Goal:** Transform VTaaS into a true SaaS by securing it with user accounts and charging for premium, compute-heavy AI jobs.
-
-#### 8.1 User Authentication (Clerk/Auth0) — ⬜ Planned
-- **Work:**
-  1. Integrate a modern Auth provider (Clerk, Auth0, or Supabase Auth) into the React frontend.
-  2. Map authenticated users to the `user_id` column in the database, overriding the `LocalDevUser` stub.
-  3. Implement JWT validation on the NestJS API so only authenticated users can upload files and create jobs.
-
-#### 8.2 Credit System — ⬜ Planned
-- **Work:**
-  1. Create a `users` table or `credits` ledger in PostgreSQL.
-  2. Define credit costs: (e.g., standard transcode = 1 credit, AI upscale = 50 credits).
-  3. Update `POST /api/jobs` to check the user's credit balance. If insufficient, return a `402 Payment Required` exception.
-  4. Deduct the correct amount of credits upon job creation.
-
-#### 8.3 Stripe Checkout & Webhook Handler — ⬜ Planned
-- **Work:**
-  1. Integrate Stripe Checkout to allow users to purchase credit bundles.
-  2. Build a secure `/api/webhooks/stripe` endpoint on the NestJS API to listen for successful payload completions.
-  3. The webhook handler must be strictly idempotent: when an `checkout.session.completed` event fires, increment the user's database credits and ensure the webhook cannot be replayed maliciously.
+* [ ] **Issue 8.1:** User Authentication (Clerk/Auth0) and User Database Schema.
+* [ ] **Issue 8.2:** Credit System (Deduct credits upon job creation).
+* [ ] **Issue 8.3:** Stripe Checkout & Webhook Handler to fulfill credit purchases securely.

@@ -253,7 +253,7 @@
 - **Proof:** Unit tests pass (3 new tests, 8 total SQS tests)
 - **Rollback:** Remove `enqueueTranscode` method and `TranscodePayload` from `sqs.service.ts`
 
-#### 4.3 `POST /api/jobs` creates DB row only
+#### 4.3 `POST /api/jobs` creates DB row only — ✅ Done
 - **Git Branch:** `feat/issue-4.3-create-job`
 - **Work:**
   1. Create `JobsModule`, `JobsService`, `JobsController` (`POST /api/jobs`)
@@ -275,6 +275,7 @@
 - **AC:** Job creation dispatches SQS message when flag is on; skips with log when off
 - **Proof:** Unit tests with mocked SqsService; `awslocal sqs receive-message` shows D-007 payload
 - **Rollback:** Remove enqueue call from service; set `ENQUEUE_ENABLED=false` as interim
+- **Note** add the `ENQUEUE_ENABLED` flag to the environment variable table in development docs
 
 #### 4.5 Idempotency: duplicate create returns existing job
 - **Git Branch:** `feat/issue-4.5-idempotency`

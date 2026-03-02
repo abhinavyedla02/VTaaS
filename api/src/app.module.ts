@@ -7,9 +7,10 @@ import { PrismaModule } from './common/prisma.module';
 import { S3Module } from './common/s3/s3.module';
 import { SqsModule } from './common/sqs/sqs.module';
 import { UploadsModule } from './uploads/uploads.module';
+import { JobsModule } from './jobs/jobs.module';
 
 @Module({
-  imports: [PrismaModule, S3Module, SqsModule, UploadsModule],
+  imports: [PrismaModule, S3Module, SqsModule, UploadsModule, JobsModule],
   controllers: [HealthController],
   providers: [
     {

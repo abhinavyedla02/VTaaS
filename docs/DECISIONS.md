@@ -109,3 +109,22 @@
   - API rejects upload requests exceeding size limit (`FILE_TOO_LARGE` error code)
   - Presigned URLs expire after configured duration
   - HEAD check before job creation verifies actual uploaded size
+
+---
+
+## D-011: SQS queue configuration (Phase 0)
+- **Status:** Decided (implemented in `sqs.service.ts`)
+- **Queues:**
+  | Queue | Purpose |
+  |-------|---------|
+  | `transcode-jobs` | Main job queue consumed by worker |
+  | `transcode-jobs-dlq` | Dead-letter queue for failed messages |
+- **Attributes:**
+  | Attribute | Value | Rationale |
+  |-----------|-------|-----------|
+  | `VisibilityTimeout` | `300` (5min) | Video processing takes significant time; default 30s would cause duplicate processing |
+  | `maxReceiveCount` | `3` | Messages move to DLQ after 3 failed processing attempts |
+- **Consequence:**
+  - Queue creation is idempotent (`CreateQueueCommand` returns existing URL)
+  - DLQ must be created before main queue (ARN needed for RedrivePolicy)
+  - Worker must complete processing within 5 minutes or extend visibility

@@ -74,7 +74,11 @@ docker compose down -v
 | `MAX_UPLOAD_SIZE_BYTES` | Max file size for uploads | `524288000` (500MB) |
 | `UPLOAD_EXPIRY_SECONDS` | Presigned URL expiry time | `900` (15min) |
 | `AWS_ENDPOINT_URL` | LocalStack endpoint | `http://localstack:4566` (Docker) |
-| `AWS_REGION` | AWS region for S3 client | `us-east-1` |
+| `AWS_REGION` | AWS region for S3/SQS client | `us-east-1` |
+| `SQS_QUEUE_NAME` | Main transcode queue | `transcode-jobs` |
+| `SQS_DLQ_NAME` | Dead-letter queue | `transcode-jobs-dlq` |
+| `SQS_MAX_RECEIVE_COUNT` | Retries before DLQ | `3` |
+| `ENQUEUE_ENABLED` | Gate SQS dispatch (set `false` to disable) | `true` (implicit) |
 
 ---
 

@@ -228,11 +228,12 @@
 - **Contract:** SQS v0 message includes `profiles`.
 
 Sub-issues (planned):
-- 4.1 Local SQS queue + DLQ creation
+- 4.1 Local SQS queue + DLQ creation — ✅ Done
 - 4.2 Queue client wrapper `enqueueTranscode(...)`
 - 4.3 `POST /api/jobs` creates DB row only
 - 4.4 Enqueue message after DB write (`ENQUEUE_ENABLED` flag)
 - 4.5 Idempotency: duplicate create returns existing job and does not enqueue again
+  - **Note:** Import `PrismaClientKnownRequestError` from `@prisma/client/runtime/library` (not top-level `@prisma/client`) to avoid circular dependency/typing issues with NestJS DI. Check `error.code === 'P2002'` for unique constraint violations.
 - 4.6 `GET /api/jobs/:id` (required for Phase 0 demo polling)
 - 4.7 Contract tests for job endpoints
 

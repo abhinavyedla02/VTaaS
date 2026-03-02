@@ -2,12 +2,15 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { JobsService, CreateJobResponse } from './jobs.service';
 import { PrismaService } from '../common/prisma.service';
 import { S3Service } from '../common/s3/s3.service';
+import { SqsService } from '../common/sqs/sqs.service';
 import { DomainException } from '../common/exceptions';
 
 describe('JobsService', () => {
     let service: JobsService;
-    let mockPrisma: any;
+    let mockPrisma: { job: { create: jest.Mock } };
     let mockHeadObject: jest.Mock;
+    let mockEnqueueTranscode: jest.Mock;
+    let savedEnqueueEnabled: string | undefined;
 
     const mockJob = {
         id: 'job-uuid-123',
@@ -22,6 +25,9 @@ describe('JobsService', () => {
     };
 
     beforeEach(async () => {
+        savedEnqueueEnabled = process.env.ENQUEUE_ENABLED;
+        delete process.env.ENQUEUE_ENABLED;
+
         mockPrisma = {
             job: {
                 create: jest.fn().mockResolvedValue(mockJob),
@@ -33,15 +39,26 @@ describe('JobsService', () => {
             contentType: 'video/mp4',
         });
 
+        mockEnqueueTranscode = jest.fn().mockResolvedValue(undefined);
+
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 JobsService,
                 { provide: PrismaService, useValue: mockPrisma },
                 { provide: S3Service, useValue: { headObject: mockHeadObject } },
+                { provide: SqsService, useValue: { enqueueTranscode: mockEnqueueTranscode } },
             ],
         }).compile();
 
         service = module.get<JobsService>(JobsService);
+    });
+
+    afterEach(() => {
+        if (savedEnqueueEnabled !== undefined) {
+            process.env.ENQUEUE_ENABLED = savedEnqueueEnabled;
+        } else {
+            delete process.env.ENQUEUE_ENABLED;
+        }
     });
 
     describe('createJob', () => {
@@ -76,6 +93,37 @@ describe('JobsService', () => {
             ).rejects.toThrow(DomainException);
 
             expect(mockPrisma.job.create).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('enqueue behavior', () => {
+        it('should enqueue transcode message by default (ENQUEUE_ENABLED unset)', async () => {
+            await service.createJob('test-user', 'inputs/test-uuid.mp4');
+
+            expect(mockEnqueueTranscode).toHaveBeenCalledWith({
+                jobId: 'job-uuid-123',
+                inputKey: 'inputs/test-uuid.mp4',
+                profiles: ['720p'],
+            });
+        });
+
+        it('should skip enqueue when ENQUEUE_ENABLED=false', async () => {
+            process.env.ENQUEUE_ENABLED = 'false';
+
+            await service.createJob('test-user', 'inputs/test-uuid.mp4');
+
+            expect(mockEnqueueTranscode).not.toHaveBeenCalled();
+        });
+
+        it('should propagate enqueue errors (not swallow them)', async () => {
+            mockEnqueueTranscode.mockRejectedValueOnce(new Error('SQS unavailable'));
+
+            await expect(
+                service.createJob('test-user', 'inputs/test-uuid.mp4'),
+            ).rejects.toThrow('SQS unavailable');
+
+            // Job was still created in DB before enqueue failed
+            expect(mockPrisma.job.create).toHaveBeenCalled();
         });
     });
 });

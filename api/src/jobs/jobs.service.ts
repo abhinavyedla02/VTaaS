@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { S3Service } from '../common/s3/s3.service';
+import { SqsService } from '../common/sqs/sqs.service';
 
 export interface CreateJobResponse {
     id: string;
@@ -14,6 +15,7 @@ export class JobsService {
     constructor(
         private readonly prisma: PrismaService,
         private readonly s3Service: S3Service,
+        private readonly sqsService: SqsService,
     ) { }
 
     async createJob(userId: string, inputKey: string): Promise<CreateJobResponse> {
@@ -25,8 +27,21 @@ export class JobsService {
             data: { userId, inputKey },
         });
 
+        // 3. Enqueue transcode message (gated by ENQUEUE_ENABLED)
+        const enqueueEnabled = process.env.ENQUEUE_ENABLED !== 'false';
+        if (enqueueEnabled) {
+            await this.sqsService.enqueueTranscode({
+                jobId: job.id,
+                inputKey: job.inputKey,
+                profiles: ['720p'],
+            });
+        } else {
+            this.logger.warn(`ENQUEUE_ENABLED=false — skipping SQS dispatch for job ${job.id}`);
+        }
+
         this.logger.log(`Job created: ${job.id} (status: ${job.status})`);
 
         return { id: job.id, status: job.status };
     }
 }
+

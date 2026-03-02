@@ -51,6 +51,7 @@ services:
       - DATABASE_URL=postgresql://vtaas:vtaas@db:5432/vtaas
       - AWS_ENDPOINT_URL=http://localstack:4566
       - AWS_REGION=us-east-1
+      - ENQUEUE_ENABLED=true
     depends_on:
       db:
         condition: service_healthy

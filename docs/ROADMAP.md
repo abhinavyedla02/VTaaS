@@ -225,17 +225,87 @@
 
 ### ISSUE-4: Create Job → Enqueue (SQS)
 - **Goal:** Create `PENDING` job row and enqueue message to SQS.
-- **Contract:** SQS v0 message includes `profiles`.
+- **Contract:** SQS v0 message includes `profiles` (locked per D-007).
 
-Sub-issues (planned):
-- 4.1 Local SQS queue + DLQ creation — ✅ Done
-- 4.2 Queue client wrapper `enqueueTranscode(...)` — ✅ Done
-- 4.3 `POST /api/jobs` creates DB row only
-- 4.4 Enqueue message after DB write (`ENQUEUE_ENABLED` flag)
-- 4.5 Idempotency: duplicate create returns existing job and does not enqueue again
-  - **Note:** Import `PrismaClientKnownRequestError` from `@prisma/client/runtime/library` (not top-level `@prisma/client`) to avoid circular dependency/typing issues with NestJS DI. Check `error.code === 'P2002'` for unique constraint violations.
-- 4.6 `GET /api/jobs/:id` (required for Phase 0 demo polling)
-- 4.7 Contract tests for job endpoints
+#### 4.1 SQS Infrastructure — ✅ Done
+- **Git Branch:** `feat/issue-4.1-sqs-infra`
+- **Work:**
+  1. Install `@aws-sdk/client-sqs`
+  2. Create `SqsModule` (`@Global`) and `SqsService` with `OnModuleInit`
+  3. `onModuleInit`: create `transcode-jobs-dlq`, get DLQ ARN, create `transcode-jobs` with `RedrivePolicy` and `VisibilityTimeout: 300` (5min)
+  4. Wire `SqsModule` into `AppModule`
+  5. Add D-011 decision and document env vars (`SQS_QUEUE_NAME`, `SQS_DLQ_NAME`, `SQS_MAX_RECEIVE_COUNT`)
+- **Commit:** `feat: add SQS module with queue + DLQ init and VisibilityTimeout`
+- **Push:** `feat/issue-4.1-sqs-infra`
+- **AC:** App starts, logs "Queue initialized", `awslocal sqs list-queues` shows both queues, VisibilityTimeout is 300
+- **Proof:** Unit tests pass (5 tests); startup logs + `awslocal sqs list-queues`
+- **Rollback:** Remove `SqsModule` from `AppModule`; delete `api/src/common/sqs/`; `npm uninstall @aws-sdk/client-sqs`
+
+#### 4.2 Queue client wrapper `enqueueTranscode(...)` — ✅ Done
+- **Git Branch:** `feat/issue-4.2-enqueue-wrapper`
+- **Work:**
+  1. Add `TranscodePayload` interface (`{ jobId, inputKey, profiles }` — D-007 locked)
+  2. Add `enqueueTranscode(payload)` method to `SqsService` using `SendMessageCommand`
+  3. Unit tests: payload shape, QueueUrl, error propagation
+- **Commit:** `feat: add enqueueTranscode wrapper with D-007 payload`
+- **Push:** `feat/issue-4.2-enqueue-wrapper`
+- **AC:** `enqueueTranscode` sends correctly serialized D-007 message to cached queue URL
+- **Proof:** Unit tests pass (3 new tests, 8 total SQS tests)
+- **Rollback:** Remove `enqueueTranscode` method and `TranscodePayload` from `sqs.service.ts`
+
+#### 4.3 `POST /api/jobs` creates DB row only
+- **Git Branch:** `feat/issue-4.3-create-job`
+- **Work:**
+  1. Create `JobsModule`, `JobsService`, `JobsController` (`POST /api/jobs`)
+  2. DTO: `CreateJobDto { inputKey: string }`
+  3. Controller uses `@User()` decorator (Issue 2.5) to resolve `userId`
+  4. Service calls `s3Service.headObject(inputKey)` **before** DB insert to validate file exists
+  5. Service calls `prisma.job.create({ data: { userId, inputKey } })`
+  6. Register `JobsModule` in `AppModule`
+- **AC:** `POST /api/jobs { inputKey }` creates a `PENDING` row; returns `{ id, status }`; missing file returns 400 `OBJECT_NOT_FOUND`
+- **Proof:** Unit tests + `curl` output
+- **Rollback:** Remove `JobsModule` from `AppModule`; delete jobs controller/service files
+
+#### 4.4 Enqueue message after DB write (`ENQUEUE_ENABLED` flag)
+- **Git Branch:** `feat/issue-4.4-enqueue-flag`
+- **Work:**
+  1. After `prisma.job.create`, call `sqsService.enqueueTranscode({ jobId, inputKey, profiles: ['720p'] })`
+  2. Gate behind `process.env.ENQUEUE_ENABLED !== 'false'` (default: enabled)
+  3. If disabled, log warning and skip dispatch
+- **AC:** Job creation dispatches SQS message when flag is on; skips with log when off
+- **Proof:** Unit tests with mocked SqsService; `awslocal sqs receive-message` shows D-007 payload
+- **Rollback:** Remove enqueue call from service; set `ENQUEUE_ENABLED=false` as interim
+
+#### 4.5 Idempotency: duplicate create returns existing job
+- **Git Branch:** `feat/issue-4.5-idempotency`
+- **Work:**
+  1. Wrap `prisma.job.create()` in try/catch
+  2. Catch `PrismaClientKnownRequestError` with `error.code === 'P2002'` (unique constraint `user_input_unique`)
+  3. On duplicate: `prisma.job.findUnique({ where: { user_input_unique: { userId, inputKey } } })` → return existing job
+  4. **No enqueue on duplicate** — `enqueueTranscode` only runs inside the `try` block on new creation
+  - **Note:** Import `PrismaClientKnownRequestError` from `@prisma/client/runtime/library` (not top-level `@prisma/client`) to avoid circular dependency/typing issues with NestJS DI.
+- **AC:** Second `POST /api/jobs` with same `(userId, inputKey)` returns existing job; SQS message count does not increase
+- **Proof:** Unit tests; `curl` twice → same job ID; `awslocal sqs` shows only 1 message
+- **Rollback:** Remove try/catch; duplicate inserts will throw 500 (constraint violation)
+
+#### 4.6 `GET /api/jobs/:id` (polling endpoint)
+- **Git Branch:** `feat/issue-4.6-get-job`
+- **Work:**
+  1. Add `GET /api/jobs/:id` to `JobsController`
+  2. `JobsService.findById(id)` → `prisma.job.findUnique({ where: { id } })`
+  3. Return `{ id, status, inputKey, outputKeys, error, updatedAt }` or 404
+- **AC:** `GET /api/jobs/:id` returns full job shape; missing ID returns 404
+- **Proof:** Unit tests + curl output
+- **Rollback:** Remove GET handler from controller
+
+#### 4.7 Contract tests for job endpoints
+- **Git Branch:** `feat/issue-4.7-contract-tests`
+- **Work:**
+  1. `jobs.controller.spec.ts` — HTTP contract tests with mocked service (happy path, missing file, duplicate, GET existing, GET missing)
+  2. `scripts/test-jobs-flow.sh` — integration script: presign → PUT → create job → verify idempotency → GET → verify SQS message
+- **AC:** All contract tests pass; integration script completes end-to-end
+- **Proof:** Test output + script output
+- **Rollback:** Remove test files
 
 ---
 

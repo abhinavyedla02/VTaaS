@@ -158,3 +158,39 @@ Stop and ask if:
 - Prefer `CMD-SHELL` with fallbacks or use built-in tools (e.g., `pg_isready` for Postgres).
 - If a tool must be used, document the requirement and verify it exists in the base image.
 - Example: LocalStack healthcheck must not assume `curl` exists without verification.
+
+---
+
+## Quick start (resume checklist)
+When starting a new session or resuming work:
+1. Read `docs/ROADMAP.md` to identify current issue and phase
+2. Read `docs/DECISIONS.md` for locked contracts and prior decisions
+3. Read `docs/ARCHITECTURE.md` for component responsibilities
+4. Check `git status` and `git log --oneline -5` for workspace state
+5. Run `npx jest` to confirm all existing tests pass before editing
+6. Review `docs/private/learning_summary-{N}.md` for the current issue — add a new section per sub-issue as you complete work
+
+---
+
+## Learning summary requirement (per sub-issue)
+After completing each sub-issue, update the corresponding `docs/private/learning_summary-{issue}.md` with:
+- **What We Built** — one paragraph summary
+- **The One-Liner** — a resume/interview-ready quote
+- **Key Concepts** — numbered, with interview tips
+- **What I Learned the Hard Way** — gotchas and non-obvious lessons
+- **How to Talk About This** — Q&A format for interview prep
+- **Files to Review** — table linking to relevant source files
+
+This is a living document — append new sections as sub-issues are completed.
+
+---
+
+## Infrastructure defaults rule (non-negotiable)
+**Never accept default values for infrastructure resources without reviewing them.**
+
+Before creating any queue, topic, bucket, or similar resource:
+1. List all configurable attributes and their defaults
+2. Evaluate whether each default is appropriate for your workload
+3. Document any overridden values with rationale in `docs/DECISIONS.md`
+
+Example: SQS default `VisibilityTimeout` is 30 seconds — far too short for video processing. We override to 300s (D-011).

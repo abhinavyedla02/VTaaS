@@ -1,10 +1,4 @@
-
----
-
-## `docs/ROADMAP.md`
-
-```markdown
-# VTaaS Roadmap (Public, Sanitized)
+# VTaaS Roadmap
 
 ## Principles
 - This roadmap is **issue-driven** and intentionally boring (public repo).
@@ -13,9 +7,14 @@
 
 ---
 
-## Phase 0A — Foundation (Local dev shape + observability)
+# Phase 1 — The Core Engine (Local Pipeline)
+
+*Build the fully functional transcode pipeline locally using Docker Compose + LocalStack. No cloud deployment until this is complete.*
+
+---
 
 ### ISSUE-1: Repo Init + Compose
+
 #### 1.1 Bootstrap repo scaffold — ✅ Done
 - **AC:** monorepo folders exist (`api/`, `worker/`, `web/`, `infra/`); Node pinned; README quickstart
 - **Proof:** tree/README renders
@@ -30,7 +29,6 @@
 - **AC:** LocalStack becomes `healthy` and `depends_on: service_healthy` is valid. Healthcheck must not assume curl exists in the image.
 - **Proof:** compose ps shows healthy; LocalStack health endpoint responds
 - **Rollback:** revert healthcheck change
-
 
 #### 1.3 Minimal API with healthcheck — ✅ Done
 - **AC:** `curl localhost:3000/api/health` -> `{"status":"ok"}`
@@ -48,8 +46,6 @@
 - **Rollback:** remove web service
 
 ---
-
-## Phase 0B — Core Pipeline (Local end-to-end demo)
 
 ### ISSUE-2: Job Model + Migrations
 - **Goal:** DB-backed job lifecycle with idempotency.
@@ -257,11 +253,12 @@
 - **Git Branch:** `feat/issue-4.3-create-job`
 - **Work:**
   1. Create `JobsModule`, `JobsService`, `JobsController` (`POST /api/jobs`)
-  2. DTO: `CreateJobDto { inputKey: string }`
+  2. DTO: `CreateJobDto { inputKey: string }` with `@IsString()` + `@IsNotEmpty()` (class-validator)
   3. Controller uses `@User()` decorator (Issue 2.5) to resolve `userId`
   4. Service calls `s3Service.headObject(inputKey)` **before** DB insert to validate file exists
   5. Service calls `prisma.job.create({ data: { userId, inputKey } })`
   6. Register `JobsModule` in `AppModule`
+  7. Enable global `ValidationPipe` in `main.ts` (`whitelist`, `forbidNonWhitelisted`)
 - **AC:** `POST /api/jobs { inputKey }` creates a `PENDING` row; returns `{ id, status }`; missing file returns 400 `OBJECT_NOT_FOUND`
 - **Proof:** Unit tests + `curl` output
 - **Rollback:** Remove `JobsModule` from `AppModule`; delete jobs controller/service files
@@ -275,7 +272,7 @@
 - **AC:** Job creation dispatches SQS message when flag is on; skips with log when off
 - **Proof:** Unit tests with mocked SqsService; `awslocal sqs receive-message` shows D-007 payload
 - **Rollback:** Remove enqueue call from service; set `ENQUEUE_ENABLED=false` as interim
-- **Note** add the `ENQUEUE_ENABLED` flag to the environment variable table in development docs
+- **Note:** Add the `ENQUEUE_ENABLED` flag to the environment variable table in DEVELOPMENT.md
 
 #### 4.5 Idempotency: duplicate create returns existing job
 - **Git Branch:** `feat/issue-4.5-idempotency`
@@ -321,99 +318,173 @@ Sub-issues (planned):
 
 ---
 
-## Phase 0C — Reliability & Failure Proof
+# Phase 2 — Reliability & Observability
+
+*Prove the pipeline is resilient and observable before opening it to the public.*
+
+---
 
 ### ISSUE-6: Failure Drill A — Crash Mid-Transcode
 - **AC:** simulate worker crash mid-ffmpeg; message retries; no duplicate outputs; final status correct
 - **Proof:** logs + artifact checks
 - **Rollback:** disable drill harness
 
----
-
-## Phase 0D — Automation
-
 ### ISSUE-7: CI v1
 - **AC:** GitHub Actions runs lint/typecheck/tests; builds API & Worker images
 - **Rollback:** disable workflow via flag
 
----
+### ISSUE-8: Tracing v1 (OTEL)
+- **AC:** Distributed traces visible across API → SQS → Worker
+- **Rollback:** remove OTEL instrumentation
 
-## Phase 1 — Observability + Guardrails (after local pipeline works)
-- ISSUE-8: Tracing v1 (OTEL)
-- ISSUE-9: Metrics v1 (`/metrics`)
-- ISSUE-10: Contract tests for `/api/jobs/:id`
-- ISSUE-11: Failure Drill B — Visibility timeout + heartbeat/extend
-- ISSUE-12: Error taxonomy (typed error codes)
+### ISSUE-9: Metrics v1 (`/metrics`)
+- **AC:** Prometheus-compatible endpoint exposes request count, queue depth, transcode duration
+- **Rollback:** remove metrics middleware
 
----
+### ISSUE-10: Contract tests for `/api/jobs/:id`
+- **AC:** Automated tests validate response shape against documented contract
+- **Rollback:** remove test files
 
-## Phase 2 — Staging on AWS (Mid phase, planned)
-This phase migrates the local pipeline to a minimal AWS staging footprint.
-(Exact IaC tool is TBD: Terraform or CDK.)
+### ISSUE-11: Failure Drill B — Visibility timeout + heartbeat/extend
+- **AC:** Worker extends visibility during long transcodes; expired messages retry correctly
+- **Rollback:** disable heartbeat logic
 
-Planned issue set (high level):
-- Staging infra scaffold (VPC, ECS/ECR, S3, SQS, RDS, logs)
-- Deploy API to ECS (ALB, healthcheck, secrets)
-- Deploy Worker to ECS (task role, queue consume)
-- CI/CD via GitHub OIDC -> ECR -> ECS deploy
-- CloudFront for output playback
+### ISSUE-12: Error taxonomy (typed error codes)
+- **AC:** All API errors return structured `{ code, message }` with documented codes
+- **Rollback:** revert to generic error handling
 
 ---
 
-## Phase 3 — Production hardening (Final phase, planned)
-Planned areas:
-- Quotas/rate limits
-- DLQ reprocess tooling + admin controls
-- Signed playback + private content options
-- Billing + idempotent webhooks
-- HLS packaging + multi-profile ladder
-- Cost controls (lifecycle policies, budgets/alarms)
-- Deployment safety (blue/green/canary, rollback automation)
+# Phase 3 — Public Portfolio Guardrails
+
+*Make the application safe, cost-effective, and resilient for the open internet. This phase MUST be complete before any public deployment (see D-012).*
 
 ---
 
-### ISSUE-6: Public Portfolio Readiness
-*Make the application safe, cost-effective, and resilient for the open internet.*
-
-- **Goal:** Prepare VTaaS for public deployment as an interactive portfolio piece without risking massive infrastructure bills, abuse, or infinite storage growth.
-
-#### 6.1 Strict Resource Limits — ⬜ Planned
-- **Work:** 
+### ISSUE-13: Strict Resource Limits — ⬜ Planned
+- **Work:**
   1. Configure `MAX_UPLOAD_SIZE_BYTES` to a strict maximum (e.g., 20MB).
   2. Implement video duration extraction (using `ffprobe` in the worker or a fast header parser in the API) to reject files longer than 30 or 60 seconds.
   3. Hardcode maximum allowed resolutions (e.g., 720p max) to cap transcoding compute time.
 
-#### 6.2 API Rate Limiting — ⬜ Planned
+### ISSUE-14: API Rate Limiting — ⬜ Planned
 - **Work:**
   1. Install and configure `@nestjs/throttler`.
   2. Apply strict IP-based rate limits to `POST /api/uploads` (e.g., 5 uploads per hour per IP).
   3. Apply limits to `POST /api/jobs` to prevent SQS queue spamming and compute exhaustion.
 
-#### 6.3 Ephemeral Data Cleanup (Garbage Collection) — ⬜ Planned
+### ISSUE-15: Ephemeral Data Cleanup (Garbage Collection) — ⬜ Planned
 - **Work:**
   1. Implement a scheduled task/cron job (using `@nestjs/schedule` or an AWS EventBridge rule).
   2. The cron job runs hourly to permanently delete inputs and outputs from S3 that are older than 2 hours.
   3. The cron job purges job records from the PostgreSQL database that are older than 2 hours to keep the free-tier database tiny.
 
-#### 6.4 Security Headers & CORS Lockdown — ⬜ Planned
+### ISSUE-16: Security Headers & CORS Lockdown — ⬜ Planned
 - **Work:**
   1. Configure `@nestjs/helmet` for API security headers.
   2. Lock down CORS origins on both the NestJS API and the S3 bucket configuration to only allow requests from the production frontend domain.
 
-#### 6.5 Interactive "Try Me" Demo File — ⬜ Planned
+### ISSUE-17: Interactive "Try Me" Demo File — ⬜ Planned
 - **Work:**
   1. Create a prominent "Try Me" button on the React frontend.
   2. Clicking the button bypasses the local file picker and instead uses a pre-packaged, short (5-second), highly optimized `.mp4` file bundled with the frontend code.
   3. This ensures visitors can test the pipeline instantly without needing to find and upload their own compliant video file.
 
+---
 
-### Phase 7: AI Video Upscaling (Python/GPU Worker)
+# Phase 4 — Frontend Integration & Portfolio UI
+
+*Build the actual user-facing portfolio website to test the end-to-end workflow before adding advanced features.*
+
+---
+
+### ISSUE-18: Next.js Portfolio Scaffolding — ⬜ Planned
+- **Work:**
+  1. Scaffold Next.js app with Tailwind CSS, routing, and layout system.
+  2. Establish page structure: Landing, Upload, Job Status, About.
+  3. Responsive design with modern aesthetics.
+
+### ISSUE-19: Upload Form Integration — ⬜ Planned
+- **Work:**
+  1. Integrate the `UploadForm` component with the backend `POST /api/uploads` and `POST /api/jobs` APIs.
+  2. Handle the full flow: file select → presign → PUT to S3 → create job → redirect to status page.
+
+### ISSUE-20: Job Polling & Video Player — ⬜ Planned
+- **Work:**
+  1. Implement real-time job status polling via `GET /api/jobs/:id`.
+  2. Build a video player component to view transcoded output files.
+  3. Display progress states: uploading → pending → processing → succeeded/failed.
+
+---
+
+# Phase 5 — CI/CD & Dual-Deployment (Staging vs Prod)
+
+*Build a professional release pipeline testing two different deployment strategies.*
+
+---
+
+### ISSUE-21: PaaS Deployment (Staging) — ⬜ Planned
+- **Work:**
+  1. Deploy backend to Render or Railway (PaaS).
+  2. Deploy frontend to Vercel.
+  3. Provision managed Postgres (Neon free tier).
+  4. Establish "Staging" environment with real S3/SQS.
+
+### ISSUE-22: AWS Native Deployment (Production) — ⬜ Planned
+- **Work:**
+  1. Deploy API and Worker to AWS ECS (Fargate).
+  2. Push Docker images to ECR via GitHub Actions.
+  3. Provision production S3 bucket, SQS queues, and RDS/Neon database.
+  4. Establish "Production" environment.
+
+### ISSUE-23: Database Migrations & Env Management — ⬜ Planned
+- **Work:**
+  1. Automate Prisma migration execution in CI/CD pipeline.
+  2. Manage environment variables across Staging/Prod (SSM Parameter Store or Render env groups).
+  3. Document rollback procedures for failed migrations.
+
+---
+
+# Phase 6 — AI Video Upscaling (Python/GPU Worker)
+
 *Introduce a high-value AI compute tier.*
-* [ ] **Issue 7.1:** Add `jobType` (Standard vs. AI) to the database and SQS payload.
-* [ ] **Issue 7.2:** Build a Python worker (PyTorch/Real-ESRGAN) to consume AI jobs from the SQS queue, process frames, and upload the 1080p result to S3.
 
-### Phase 8: SaaS Monetization (Stripe Integration)
+---
+
+### ISSUE-24: Job Type Routing — ⬜ Planned
+- **Work:**
+  1. Add `jobType` field (Standard vs. AI) to database schema.
+  2. Update SQS payload to include `jobType` for worker routing.
+  3. Create separate SQS queue for AI jobs (`transcode-jobs-ai`).
+
+### ISSUE-25: Python AI Worker (Real-ESRGAN) — ⬜ Planned
+- **Work:**
+  1. Build Python worker using PyTorch/Real-ESRGAN.
+  2. Worker consumes AI jobs from SQS, processes frames, uploads 1080p result to S3.
+  3. GPU instance selection and cost analysis.
+
+---
+
+# Phase 7 — SaaS Monetization (Stripe Integration)
+
 *Offset GPU costs by charging for AI upscaling.*
-* [ ] **Issue 8.1:** User Authentication (Clerk/Auth0) and User Database Schema.
-* [ ] **Issue 8.2:** Credit System (Deduct credits upon job creation).
-* [ ] **Issue 8.3:** Stripe Checkout & Webhook Handler to fulfill credit purchases securely.
+
+---
+
+### ISSUE-26: User Authentication — ⬜ Planned
+- **Work:**
+  1. Integrate Clerk (or Auth0) for user authentication.
+  2. Update database schema with user table and relationships.
+  3. Replace `DevUserInterceptor` with real auth guard.
+
+### ISSUE-27: Credit System — ⬜ Planned
+- **Work:**
+  1. Add credits table to database.
+  2. Deduct credits upon AI job creation.
+  3. Block job creation when credits are exhausted.
+
+### ISSUE-28: Stripe Checkout & Webhooks — ⬜ Planned
+- **Work:**
+  1. Implement Stripe Checkout session creation for credit purchases.
+  2. Build webhook handler to fulfill credit purchases securely.
+  3. Idempotent webhook processing (handle Stripe retries).

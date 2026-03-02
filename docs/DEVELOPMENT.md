@@ -102,3 +102,37 @@ docker compose up -d
 ```
 
 This tests the full pipeline: presign → PUT → HEAD → verify size and content type.
+
+---
+
+## LocalStack → AWS Transition
+
+### Code: 100% Lift-and-Shift
+
+Because we use the official AWS SDK (`@aws-sdk/client-s3`, `@aws-sdk/client-sqs`) pointed at LocalStack, transitioning the NestJS application requires **zero code changes**. Just change environment variables:
+
+| Variable | Local | Production |
+|----------|-------|------------|
+| `AWS_ENDPOINT_URL` | `http://localstack:4566` | **Remove entirely** |
+| `AWS_ACCESS_KEY_ID` | `test` | Real IAM credentials |
+| `AWS_SECRET_ACCESS_KEY` | `test` | Real IAM credentials |
+
+The SDK auto-detects real AWS and routes `SqsService`/`S3Service` calls to the cloud.
+
+### Infrastructure: Must Be Created Separately
+
+`docker-compose.yml` does not translate to AWS. Production resources must be provisioned:
+
+| Resource | Local (Docker Compose) | Production Options |
+|----------|------------------------|--------------------|
+| S3 + SQS | LocalStack container | AWS Console / Terraform / CDK |
+| PostgreSQL | `postgres:16` container | Neon (free tier), Supabase, or AWS RDS ($15+/mo) |
+| API + Worker | Docker containers | AWS ECS, Render, or Railway |
+
+### Deployment Timeline
+
+> **Do not deploy to the public internet until Phase 6 (Guardrails) is complete.**
+
+Without Issue 6.1 (strict file size limits) and 6.2 (rate limiting), bots can upload massive files and trigger unbounded FFmpeg jobs, running up compute and storage bills. The internet scans every public IP within hours — "security by obscurity" (not sharing the link) does not work.
+
+**Safe order:** Phase 4 (Queues) → Phase 5 (Worker) → Phase 6 (Guardrails) → Deploy.

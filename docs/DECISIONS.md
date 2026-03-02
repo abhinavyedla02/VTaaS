@@ -128,3 +128,21 @@
   - Queue creation is idempotent (`CreateQueueCommand` returns existing URL)
   - DLQ must be created before main queue (ARN needed for RedrivePolicy)
   - Worker must complete processing within 5 minutes or extend visibility
+
+---
+
+## D-012: LocalStack-first development & deployment strategy
+- **Status:** Decided
+- **Context:** Using `@aws-sdk/client-s3` and `@aws-sdk/client-sqs` with `AWS_ENDPOINT_URL` pointing to LocalStack means the NestJS application code is cloud-agnostic. Removing `AWS_ENDPOINT_URL` and providing real IAM credentials is the only change required to target real AWS.
+- **Decision:**
+  - Develop locally against LocalStack through Phase 5 (end-to-end working system)
+  - Complete Phase 6 (Guardrails: file size limits, rate limiting, cleanup) before any public deployment
+  - Infrastructure (S3 buckets, SQS queues, database) must be provisioned separately in production — `docker-compose.yml` is local-only
+- **Rationale:**
+  - Internet bots scan all public IPs within hours; an unprotected transcoding API would allow unbounded uploads and FFmpeg jobs, causing runaway cloud bills
+  - "Security by obscurity" (not sharing the URL) is not a valid defense — automated scanners find exposed services without needing a link
+  - LocalStack provides free, fast iteration; real AWS adds deployment latency and cost during active development
+- **Consequence:**
+  - No public deployment until Phase 6 is complete
+  - If early AWS testing is desired, lock the API behind a hardcoded `API_KEY` header until guardrails exist
+  - Production database should use a managed service with a free tier (Neon, Supabase) over AWS RDS for portfolio cost efficiency

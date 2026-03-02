@@ -136,3 +136,17 @@ The SDK auto-detects real AWS and routes `SqsService`/`S3Service` calls to the c
 Without Issue 6.1 (strict file size limits) and 6.2 (rate limiting), bots can upload massive files and trigger unbounded FFmpeg jobs, running up compute and storage bills. The internet scans every public IP within hours — "security by obscurity" (not sharing the link) does not work.
 
 **Safe order:** Phase 4 (Queues) → Phase 5 (Worker) → Phase 6 (Guardrails) → Deploy.
+
+---
+
+## Known Tech Debt
+
+Pre-existing code quality violations tracked for future cleanup. These predate the Playbook rules and should not block Phase 1 progress.
+
+| Rule Violated | File | Line | Violation | Priority |
+|---------------|------|------|-----------|----------|
+| Strict Type Safety | `s3.service.ts` | 47, 103 | `catch (error: any)` — should narrow with `instanceof` | Medium |
+| Strict Type Safety | `jobs.service.spec.ts` | 9 | `let mockPrisma: any` — use typed mock | Low |
+| Strict Type Safety | `dev-user.interceptor.spec.ts` | 9 | `let mockRequest: any` — use typed mock | Low |
+| Logging Standard | `logging.interceptor.ts` | 34 | `console.log(...)` — switch to NestJS `Logger` | Medium |
+| Logging Standard | `dev-user.interceptor.ts` | 35 | `console.warn(...)` — switch to NestJS `Logger` | Medium |

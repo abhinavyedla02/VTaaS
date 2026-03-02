@@ -11,7 +11,7 @@ Cursor is a tool. Git is the guardrail. The human is responsible for final decis
 1. The code in the repo (what exists)
 2. `docs/ARCHITECTURE.md` (system contract)
 3. `docs/DECISIONS.md` (decided choices + rationale)
-4. `docs/ROADMAP.md` (what work exists and how it’s phased)
+4. `docs/ROADMAP.md` (what work exists and how it's phased)
 5. `docs/DEVELOPMENT.md` (how to run + verify)
 
 If something is not in one of these sources, it is **not a fact**.
@@ -34,7 +34,7 @@ Before writing or modifying code, you must:
 
 No edits until the plan is provided.
 
-### Ask, don’t assume
+### Ask, don't assume
 If any requirement is ambiguous (contract shape, naming, env var name, key format, etc.), ask.
 
 ---
@@ -59,6 +59,33 @@ If any requirement is ambiguous (contract shape, naming, env var name, key forma
 
 ---
 
+## Code quality rules (non-negotiable)
+
+### Strict type safety
+**You are strictly prohibited from using `any`, `unknown` (as a bypass), or `@ts-ignore`.**
+
+When mocking dependencies in tests, use `jest.mocked()` or `Partial<Type>` with proper typing. When catching errors, type them as `Error` (or a specific subclass) and narrow with `instanceof`.
+
+*Reasoning:* Using `any` defeats the purpose of TypeScript. In a distributed system, bypassing the compiler hides fatal runtime errors that we want to catch at compile time. If a type is difficult to express, that is a signal to fix the type, not suppress the compiler.
+
+> If you ever encounter an edge case where strict typing creates a genuine impasse (not just inconvenience), stop, present the conflict, and ask for permission.
+
+### Logging standard
+**Never use `console.log`, `console.warn`, or `console.error`.** Always inject and use the NestJS `Logger`:
+
+```typescript
+private readonly logger = new Logger(MyClass.name);
+```
+
+*Reasoning:* Standard `console` methods bypass the structured JSON logging middleware we built in Phase 1. We need machine-readable JSON logs for observability. If a component uses `console.*`, it silently breaks log aggregation.
+
+### Unit test isolation
+Any file ending in `.spec.ts` must be **completely isolated**. Use the NestJS `TestingModule` to inject mocked providers. Tests must never hit a real database, queue, or storage service.
+
+*Reasoning:* Unit tests must be fast, deterministic, and runnable in CI/CD without spinning up Docker containers. If a unit test hits a real Postgres DB or LocalStack instance, it is a flaky integration test, not a unit test.
+
+---
+
 ## Diff discipline
 
 ### Keep diffs small
@@ -71,15 +98,52 @@ If any requirement is ambiguous (contract shape, naming, env var name, key forma
 - If you believe a dependency change is necessary, stop and ask.
 
 ### One issue, one branch
-- Branch name must match the issue’s branch requirement (if provided).
+- Branch name must match the issue's branch requirement (if provided).
 - Do not bundle multiple issues into one PR.
+
+---
+
+## Git workflow (hybrid: code vs. documentation)
+
+### Code changes
+You are encouraged to auto-commit and merge discrete code implementations once tests pass and AC is met. Code is a milestone — it should be captured in git immediately.
+
+### Documentation changes
+**Do NOT auto-commit documentation changes.** This includes:
+- Ticking checkboxes in `ROADMAP.md`
+- Updating `DECISIONS.md`
+- Updating `DEVELOPMENT.md`
+- Updating `CURSOR_PLAYBOOK.md`
+- Any other markdown-only changes
+
+Leave these changes **uncommitted in the working tree**. Wait for explicit "commit docs" permission from the human.
+
+**Batch-and-tag approach:** When the human approves, batch all pending doc changes into a single `docs:` commit on `main`. This keeps git history clean.
+
+*Reasoning:* Code implementations are discrete milestones. Documentation updates are continuous and iterative; auto-committing every markdown checkbox tick trashes the git history with noise. A single batched `docs:` commit is far more reviewable.
+
+> **Exception:** If a doc change is inseparable from a code change (e.g., adding a new env var requires updating `DEVELOPMENT.md` + `docker-compose.yml` simultaneously), include the doc change in the code commit.
+
+---
+
+## Environment variable discipline (Triple Update Rule)
+
+**Any new environment variable must be added in THREE places:**
+
+| # | Location | Purpose |
+|---|----------|---------|
+| 1 | `docs/DEVELOPMENT.md` | Human-readable documentation |
+| 2 | `docker-compose.yml` (under the relevant service) | Actually gives the container access |
+| 3 | `.env.example` | Template for new developers |
+
+*Reasoning:* Documenting a variable in markdown doesn't actually give the code access to it. If it is omitted from `docker-compose.yml`, the container will silently fall back to hardcoded defaults or crash. If `.env.example` is missing it, new developers won't know it exists.
 
 ---
 
 ## Verification requirements (every PR)
 Every implementation must include:
 - Exact commands to verify locally (docker compose / curl / tests)
-- Expected output (what “success” looks like)
+- Expected output (what "success" looks like)
 - Proof artifact text to paste into PR (log line, curl output, CLI output)
 - Rollback instructions (env flag preferred when relevant)
 
@@ -113,6 +177,8 @@ This catches pre-existing infrastructure gaps before they become blockers.
 - [ ] No unrelated changes
 - [ ] Verification commands provided
 - [ ] Any new env vars documented (name + purpose + defaults)
+- [ ] No `any`, `unknown` bypass, or `@ts-ignore` in changed files
+- [ ] No `console.log`/`console.warn`/`console.error` in changed files
 
 ---
 
@@ -148,6 +214,7 @@ Stop and ask if:
 - behavior would change outside the requested scope
 - there are multiple plausible approaches and the issue does not specify which to choose
 - healthcheck tooling (curl/wget) availability is uncertain
+- a non-negotiable rule (type safety, logging, test isolation, env var triple update) creates a genuine impasse
 
 ---
 

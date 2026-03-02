@@ -16,6 +16,7 @@ notes/
 # local env
 .env
 .env.*
+!.env.example
 *.log
 
 

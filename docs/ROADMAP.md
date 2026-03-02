@@ -229,7 +229,7 @@
 
 Sub-issues (planned):
 - 4.1 Local SQS queue + DLQ creation — ✅ Done
-- 4.2 Queue client wrapper `enqueueTranscode(...)`
+- 4.2 Queue client wrapper `enqueueTranscode(...)` — ✅ Done
 - 4.3 `POST /api/jobs` creates DB row only
 - 4.4 Enqueue message after DB write (`ENQUEUE_ENABLED` flag)
 - 4.5 Idempotency: duplicate create returns existing job and does not enqueue again

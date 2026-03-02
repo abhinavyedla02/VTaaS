@@ -3,7 +3,14 @@ import {
     SQSClient,
     CreateQueueCommand,
     GetQueueAttributesCommand,
+    SendMessageCommand,
 } from '@aws-sdk/client-sqs';
+
+export interface TranscodePayload {
+    jobId: string;       // UUID from DB
+    inputKey: string;    // e.g. "inputs/abc123.mp4"
+    profiles: string[];  // e.g. ["720p"] — locked per D-007
+}
 
 @Injectable()
 export class SqsService implements OnModuleInit {
@@ -73,6 +80,16 @@ export class SqsService implements OnModuleInit {
         this.logger.log(
             `Queue initialized: ${this.queueName} (DLQ: ${this.dlqName}, VisibilityTimeout: ${this.visibilityTimeout}s)`,
         );
+    }
+
+    async enqueueTranscode(payload: TranscodePayload): Promise<void> {
+        await this.client.send(
+            new SendMessageCommand({
+                QueueUrl: this.queueUrl,
+                MessageBody: JSON.stringify(payload),
+            }),
+        );
+        this.logger.log(`Enqueued job ${payload.jobId}`);
     }
 
     // Expose client for testing

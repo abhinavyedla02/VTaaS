@@ -3,6 +3,7 @@ import {
     SQSClient,
     CreateQueueCommand,
     GetQueueAttributesCommand,
+    SendMessageCommand,
 } from '@aws-sdk/client-sqs';
 
 // Mock the AWS SDK
@@ -122,6 +123,67 @@ describe('SqsService', () => {
     describe('getQueueUrl', () => {
         it('should return undefined before initialization', () => {
             expect(service.getQueueUrl()).toBeUndefined();
+        });
+    });
+
+    describe('enqueueTranscode', () => {
+        const testPayload = {
+            jobId: 'test-job-id-123',
+            inputKey: 'inputs/test-uuid.mp4',
+            profiles: ['720p'],
+        };
+
+        beforeEach(async () => {
+            // Initialize queues so queueUrl is cached
+            mockSend
+                .mockResolvedValueOnce({
+                    QueueUrl: 'http://localhost:4566/000000000000/transcode-jobs-dlq',
+                })
+                .mockResolvedValueOnce({
+                    Attributes: {
+                        QueueArn: 'arn:aws:sqs:us-east-1:000000000000:transcode-jobs-dlq',
+                    },
+                })
+                .mockResolvedValueOnce({
+                    QueueUrl: 'http://localhost:4566/000000000000/transcode-jobs',
+                });
+            await service.onModuleInit();
+            mockSend.mockClear();
+        });
+
+        it('should send a message with correct QueueUrl and serialized payload', async () => {
+            mockSend.mockResolvedValueOnce({});
+
+            await service.enqueueTranscode(testPayload);
+
+            expect(mockSend).toHaveBeenCalledTimes(1);
+            expect(mockSend).toHaveBeenCalledWith(expect.any(SendMessageCommand));
+
+            const sentCommand = mockSend.mock.calls[0][0];
+            expect(sentCommand.input.QueueUrl).toBe(
+                'http://localhost:4566/000000000000/transcode-jobs',
+            );
+        });
+
+        it('should serialize payload matching D-007 schema', async () => {
+            mockSend.mockResolvedValueOnce({});
+
+            await service.enqueueTranscode(testPayload);
+
+            const sentCommand = mockSend.mock.calls[0][0];
+            const body = JSON.parse(sentCommand.input.MessageBody);
+            expect(body).toEqual({
+                jobId: 'test-job-id-123',
+                inputKey: 'inputs/test-uuid.mp4',
+                profiles: ['720p'],
+            });
+        });
+
+        it('should rethrow errors from SQS send', async () => {
+            mockSend.mockRejectedValueOnce(new Error('SQS unavailable'));
+
+            await expect(service.enqueueTranscode(testPayload))
+                .rejects.toThrow('SQS unavailable');
         });
     });
 });

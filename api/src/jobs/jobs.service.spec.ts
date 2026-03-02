@@ -4,10 +4,11 @@ import { PrismaService } from '../common/prisma.service';
 import { S3Service } from '../common/s3/s3.service';
 import { SqsService } from '../common/sqs/sqs.service';
 import { DomainException } from '../common/exceptions';
+import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 
 describe('JobsService', () => {
     let service: JobsService;
-    let mockPrisma: { job: { create: jest.Mock } };
+    let mockPrisma: { job: { create: jest.Mock; findUnique: jest.Mock } };
     let mockHeadObject: jest.Mock;
     let mockEnqueueTranscode: jest.Mock;
     let savedEnqueueEnabled: string | undefined;
@@ -31,6 +32,7 @@ describe('JobsService', () => {
         mockPrisma = {
             job: {
                 create: jest.fn().mockResolvedValue(mockJob),
+                findUnique: jest.fn().mockResolvedValue(mockJob),
             },
         };
 
@@ -124,6 +126,52 @@ describe('JobsService', () => {
 
             // Job was still created in DB before enqueue failed
             expect(mockPrisma.job.create).toHaveBeenCalled();
+        });
+    });
+
+    describe('idempotency (duplicate handling)', () => {
+        const p2002Error = new PrismaClientKnownRequestError(
+            'Unique constraint failed on the fields: (`userId`,`inputKey`)',
+            { code: 'P2002', clientVersion: '5.0.0' },
+        );
+
+        it('should return existing job on duplicate (P2002)', async () => {
+            mockPrisma.job.create.mockRejectedValueOnce(p2002Error);
+
+            const result = await service.createJob('test-user', 'inputs/test-uuid.mp4');
+
+            expect(mockPrisma.job.findUnique).toHaveBeenCalledWith({
+                where: { user_input_unique: { userId: 'test-user', inputKey: 'inputs/test-uuid.mp4' } },
+            });
+            expect(result).toEqual({ id: 'job-uuid-123', status: 'PENDING' });
+        });
+
+        it('should NOT enqueue on duplicate', async () => {
+            mockPrisma.job.create.mockRejectedValueOnce(p2002Error);
+
+            await service.createJob('test-user', 'inputs/test-uuid.mp4');
+
+            expect(mockEnqueueTranscode).not.toHaveBeenCalled();
+        });
+
+        it('should throw DomainException if existing job vanishes (race condition)', async () => {
+            mockPrisma.job.create.mockRejectedValueOnce(p2002Error);
+            mockPrisma.job.findUnique.mockResolvedValueOnce(null);
+
+            await expect(
+                service.createJob('test-user', 'inputs/test-uuid.mp4'),
+            ).rejects.toThrow(DomainException);
+        });
+
+        it('should re-throw non-P2002 Prisma errors', async () => {
+            const otherError = new Error('Connection lost');
+            mockPrisma.job.create.mockRejectedValueOnce(otherError);
+
+            await expect(
+                service.createJob('test-user', 'inputs/test-uuid.mp4'),
+            ).rejects.toThrow('Connection lost');
+
+            expect(mockPrisma.job.findUnique).not.toHaveBeenCalled();
         });
     });
 });

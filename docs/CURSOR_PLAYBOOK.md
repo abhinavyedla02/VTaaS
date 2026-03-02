@@ -183,6 +183,8 @@ After completing each sub-issue, update the corresponding `docs/private/learning
 
 This is a living document — append new sections as sub-issues are completed.
 
+**⚠️ `docs/private/` is gitignored intentionally. Never `git add -f` files in this directory. Maintain them locally only.**
+
 ---
 
 ## Infrastructure defaults rule (non-negotiable)

@@ -174,4 +174,32 @@ describe('JobsService', () => {
             expect(mockPrisma.job.findUnique).not.toHaveBeenCalled();
         });
     });
+
+    describe('findById', () => {
+        it('should return job response when found', async () => {
+            mockPrisma.job.findUnique.mockResolvedValueOnce(mockJob);
+
+            const result = await service.findById('job-uuid-123');
+
+            expect(mockPrisma.job.findUnique).toHaveBeenCalledWith({
+                where: { id: 'job-uuid-123' },
+            });
+            expect(result).toEqual({
+                id: 'job-uuid-123',
+                status: 'PENDING',
+                inputKey: 'inputs/test-uuid.mp4',
+                outputKeys: null,
+                error: null,
+                updatedAt: mockJob.updatedAt,
+            });
+        });
+
+        it('should return null when job does not exist', async () => {
+            mockPrisma.job.findUnique.mockResolvedValueOnce(null);
+
+            const result = await service.findById('nonexistent-id');
+
+            expect(result).toBeNull();
+        });
+    });
 });

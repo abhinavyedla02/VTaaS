@@ -1,9 +1,19 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import { S3Service } from '../common/s3/s3.service';
 import { SqsService } from '../common/sqs/sqs.service';
 import { DomainException } from '../common/exceptions';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
+
+export interface GetJobResponse {
+    id: string;
+    status: string;
+    inputKey: string;
+    outputKeys: Prisma.JsonValue | null;
+    error: string | null;
+    updatedAt: Date;
+}
 
 export interface CreateJobResponse {
     id: string;
@@ -68,5 +78,18 @@ export class JobsService {
 
             throw error; // re-throw non-P2002 errors
         }
+    }
+    async findById(id: string): Promise<GetJobResponse | null> {
+        const job = await this.prisma.job.findUnique({ where: { id } });
+        if (!job) return null;
+
+        return {
+            id: job.id,
+            status: job.status,
+            inputKey: job.inputKey,
+            outputKeys: job.outputKeys,
+            error: job.error,
+            updatedAt: job.updatedAt,
+        };
     }
 }

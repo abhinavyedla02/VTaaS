@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
 import { JobsController } from './jobs.controller';
 import { JobsService, CreateJobResponse, GetJobResponse } from './jobs.service';
+import { DomainException } from '../common/exceptions';
 
 describe('JobsController', () => {
     let controller: JobsController;
@@ -51,6 +52,25 @@ describe('JobsController', () => {
             const result = await controller.create('test-user', { inputKey: 'inputs/test.mp4' });
 
             expect(result).toEqual({ id: 'job-uuid-123', status: 'PENDING' });
+        });
+
+        it('should propagate DomainException when file is missing in S3', async () => {
+            jest.mocked(mockJobsService.createJob!).mockRejectedValueOnce(
+                new DomainException('OBJECT_NOT_FOUND', 'Object not found'),
+            );
+
+            await expect(
+                controller.create('test-user', { inputKey: 'inputs/missing.mp4' }),
+            ).rejects.toThrow(DomainException);
+        });
+
+        it('should return existing job on duplicate (idempotent)', async () => {
+            const existingJob: CreateJobResponse = { id: 'existing-uuid', status: 'PENDING' };
+            jest.mocked(mockJobsService.createJob!).mockResolvedValueOnce(existingJob);
+
+            const result = await controller.create('test-user', { inputKey: 'inputs/dup.mp4' });
+
+            expect(result).toEqual({ id: 'existing-uuid', status: 'PENDING' });
         });
     });
 

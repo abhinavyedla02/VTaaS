@@ -39,8 +39,8 @@ services:
 
   api:
     build:
-      context: ./api
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: api/Dockerfile
     image: vtaas-api:dev
     container_name: vtaas_api
     ports:
@@ -57,6 +57,24 @@ services:
       - ENQUEUE_ENABLED=true
       - DEV_USER_ID=local_dev_user
       - REQUEST_LOGGING_ENABLED=true
+    depends_on:
+      db:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    image: vtaas-worker:dev
+    container_name: vtaas_worker
+    environment:
+      - DATABASE_URL=postgresql://vtaas:vtaas@db:5432/vtaas
+      - AWS_ENDPOINT_URL=http://localstack:4566
+      - AWS_REGION=us-east-1
+      - SQS_QUEUE_NAME=transcode-jobs
     depends_on:
       db:
         condition: service_healthy

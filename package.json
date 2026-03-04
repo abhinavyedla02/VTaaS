@@ -1,4 +1,10 @@
 {
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "api",
+    "worker"
+  ],
   "scripts": {
     "api:build": "docker compose build api",
     "api:up": "docker compose up -d api",

@@ -1,6 +1,6 @@
 import { JobStatus } from '@prisma/client';
-import { DomainException } from '../common/exceptions';
-import { validateJobTransition } from './job.rules';
+import { InvalidTransitionError } from './errors';
+import { validateJobTransition, buildOutputKey } from './job.rules';
 
 describe('validateJobTransition', () => {
     describe('valid transitions', () => {
@@ -51,7 +51,7 @@ describe('validateJobTransition', () => {
             'should throw on %s -> %s',
             (current, next) => {
                 expect(() => validateJobTransition(current, next)).toThrow(
-                    DomainException,
+                    InvalidTransitionError,
                 );
             },
         );
@@ -62,10 +62,10 @@ describe('validateJobTransition', () => {
                     JobStatus.PROCESSING,
                     JobStatus.PENDING,
                 );
-                fail('Expected DomainException to be thrown');
+                fail('Expected InvalidTransitionError to be thrown');
             } catch (error) {
-                expect(error).toBeInstanceOf(DomainException);
-                expect((error as DomainException).code).toBe(
+                expect(error).toBeInstanceOf(InvalidTransitionError);
+                expect((error as InvalidTransitionError).code).toBe(
                     'INVALID_JOB_TRANSITION',
                 );
             }
@@ -77,15 +77,22 @@ describe('validateJobTransition', () => {
                     JobStatus.SUCCEEDED,
                     JobStatus.PENDING,
                 );
-                fail('Expected DomainException to be thrown');
+                fail('Expected InvalidTransitionError to be thrown');
             } catch (error) {
-                expect(error).toBeInstanceOf(DomainException);
-                const response = (error as DomainException).getResponse() as {
-                    message: string;
-                };
-                expect(response.message).toContain('SUCCEEDED');
-                expect(response.message).toContain('PENDING');
+                expect(error).toBeInstanceOf(InvalidTransitionError);
+                expect((error as InvalidTransitionError).message).toContain('SUCCEEDED');
+                expect((error as InvalidTransitionError).message).toContain('PENDING');
             }
         });
+    });
+});
+
+describe('buildOutputKey', () => {
+    it('should build deterministic output key per D-006', () => {
+        expect(buildOutputKey('abc-123', '720p')).toBe('outputs/abc-123/720p.mp4');
+    });
+
+    it('should handle different profiles', () => {
+        expect(buildOutputKey('job-id', '1080p')).toBe('outputs/job-id/1080p.mp4');
     });
 });

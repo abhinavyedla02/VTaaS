@@ -103,6 +103,17 @@ docker compose up -d
 
 This tests the full pipeline: presign → PUT → HEAD → verify size and content type.
 
+### Jobs Flow (requires Docker Compose running)
+```bash
+# Start services first
+docker compose up -d
+
+# Run the jobs integration test
+./scripts/test-jobs-flow.sh
+```
+
+This tests: presign → upload → create job → idempotency → GET → 404 → SQS message verification.
+
 ---
 
 ## LocalStack → AWS Transition

@@ -263,7 +263,7 @@
 - **Proof:** Unit tests + `curl` output
 - **Rollback:** Remove `JobsModule` from `AppModule`; delete jobs controller/service files
 
-#### 4.4 Enqueue message after DB write (`ENQUEUE_ENABLED` flag)
+#### 4.4 Enqueue message after DB write (`ENQUEUE_ENABLED` flag) — ✅ Done
 - **Git Branch:** `feat/issue-4.4-enqueue-flag`
 - **Work:**
   1. After `prisma.job.create`, call `sqsService.enqueueTranscode({ jobId, inputKey, profiles: ['720p'] })`
@@ -274,7 +274,7 @@
 - **Rollback:** Remove enqueue call from service; set `ENQUEUE_ENABLED=false` as interim
 - **Note:** Add the `ENQUEUE_ENABLED` flag to the environment variable table in DEVELOPMENT.md
 
-#### 4.5 Idempotency: duplicate create returns existing job
+#### 4.5 Idempotency: duplicate create returns existing job — ✅ Done
 - **Git Branch:** `feat/issue-4.5-idempotency`
 - **Work:**
   1. Wrap `prisma.job.create()` in try/catch
@@ -286,7 +286,7 @@
 - **Proof:** Unit tests; `curl` twice → same job ID; `awslocal sqs` shows only 1 message
 - **Rollback:** Remove try/catch; duplicate inserts will throw 500 (constraint violation)
 
-#### 4.6 `GET /api/jobs/:id` (polling endpoint)
+#### 4.6 `GET /api/jobs/:id` (polling endpoint) — ✅ Done
 - **Git Branch:** `feat/issue-4.6-get-job`
 - **Work:**
   1. Add `GET /api/jobs/:id` to `JobsController`
@@ -296,7 +296,7 @@
 - **Proof:** Unit tests + curl output
 - **Rollback:** Remove GET handler from controller
 
-#### 4.7 Contract tests for job endpoints
+#### 4.7 Contract tests for job endpoints — ✅ Done
 - **Git Branch:** `feat/issue-4.7-contract-tests`
 - **Work:**
   1. `jobs.controller.spec.ts` — HTTP contract tests with mocked service (happy path, missing file, duplicate, GET existing, GET missing)

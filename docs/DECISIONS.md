@@ -146,3 +146,30 @@
   - No public deployment until Phase 6 is complete
   - If early AWS testing is desired, lock the API behind a hardcoded `API_KEY` header until guardrails exist
   - Production database should use a managed service with a free tier (Neon, Supabase) over AWS RDS for portfolio cost efficiency
+
+### D-013 — Shared Prisma Client via npm Workspaces
+- **Context:** The Worker (Issue 5) needs to update job status in the same database as the API.
+- **Decision:** Hoist `schema.prisma` and the generated Prisma client to a shared root package using npm workspaces. Both `api/` and `worker/` import the same typed client.
+- **Alternatives rejected:**
+  - Copy-paste Prisma folder into `worker/` — two sources of truth, schema drift guaranteed
+  - Raw SQL in worker — loses type safety, migration tracking, and Prisma's generated types
+- **Consequence:** Single schema, single migration history, zero drift between API and Worker.
+
+### D-014 — FFmpeg Installation in Worker Dockerfile
+- **Context:** The Worker needs to execute FFmpeg commands for video transcoding.
+- **Decision:** Worker Dockerfile installs FFmpeg at the OS level (`apk add ffmpeg` for Alpine). Startup healthcheck verifies `ffmpeg -version` succeeds before accepting SQS messages.
+- **Rationale:** FFmpeg does not exist in default Node.js Docker images. If the binary is missing, jobs will fail silently; a healthcheck makes this a loud, immediate failure.
+- **Consequence:** Worker image will be larger than the API image (~100MB for FFmpeg).
+
+### D-015 — SQS Long Polling (WaitTimeSeconds: 20)
+- **Context:** Worker polls SQS for new transcode jobs.
+- **Decision:** Configure `ReceiveMessageCommand` with `WaitTimeSeconds: 20`. Connection held open for up to 20 seconds; returns immediately if a message arrives.
+- **Alternatives rejected:**
+  - Short polling (default: `WaitTimeSeconds: 0`) — causes ~1,000 requests/second, burns CPU, generates massive AWS bills
+- **Consequence:** ~3 requests/minute during idle periods. Near-instant response when jobs arrive.
+
+### D-016 — API CORS (Deferred to Phase 4: Frontend)
+- **Context:** Browser requests from the frontend (`localhost:5173`) to the API (`localhost:3000`) will be blocked by CORS policy.
+- **Decision:** Defer `app.enableCors()` until Phase 4 (Frontend). Not a blocker for Phase 1 backend work.
+- **Rationale:** Adding CORS now would be untestable without a frontend. We'll configure it with explicit origin restrictions when the frontend exists.
+- **Consequence:** `curl` and integration scripts are unaffected; only browser requests need CORS.

@@ -24,9 +24,20 @@ info() { echo -e "${CYAN}→ $1${NC}"; }
 # -----------------------------------------------------------
 # Pre-flight: check dependencies
 # -----------------------------------------------------------
-for cmd in curl jq awslocal; do
+for cmd in curl jq; do
     command -v "$cmd" >/dev/null 2>&1 || fail "Missing dependency: $cmd"
 done
+
+# SQS helper: prefer awslocal, fall back to aws --endpoint-url, then docker exec
+if command -v awslocal >/dev/null 2>&1; then
+    SQS_CMD="awslocal sqs"
+elif command -v aws >/dev/null 2>&1; then
+    SQS_CMD="aws --endpoint-url ${AWS_ENDPOINT} sqs"
+elif docker exec vtaas_localstack awslocal sqs list-queues >/dev/null 2>&1; then
+    SQS_CMD="docker exec vtaas_localstack awslocal sqs"
+else
+    fail "Missing dependency: awslocal, aws CLI, or running LocalStack container"
+fi
 
 echo ""
 echo "=========================================="
@@ -145,10 +156,10 @@ fi
 # Step 8: Verify SQS message exists
 # -----------------------------------------------------------
 info "Checking SQS for transcode message..."
-QUEUE_URL=$(awslocal sqs get-queue-url --queue-name "$QUEUE_NAME" --output text 2>/dev/null) || \
+QUEUE_URL=$($SQS_CMD get-queue-url --queue-name "$QUEUE_NAME" --output text 2>/dev/null) || \
     fail "Could not find SQS queue: $QUEUE_NAME"
 
-SQS_RESPONSE=$(awslocal sqs receive-message \
+SQS_RESPONSE=$($SQS_CMD receive-message \
     --queue-url "$QUEUE_URL" \
     --max-number-of-messages 10 \
     --wait-time-seconds 1 2>/dev/null)

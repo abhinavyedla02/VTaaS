@@ -1,5 +1,5 @@
 import { JobStatus } from '@prisma/client';
-import { DomainException } from '../common/exceptions';
+import { InvalidTransitionError } from './errors';
 
 /**
  * Allowed job status transitions.
@@ -18,7 +18,7 @@ const VALID_TRANSITIONS: Record<JobStatus, Set<JobStatus>> = {
  *
  * @param current - The current status of the job
  * @param next - The desired next status
- * @throws DomainException with code INVALID_JOB_TRANSITION if transition is invalid
+ * @throws InvalidTransitionError if transition is invalid
  */
 export function validateJobTransition(
     current: JobStatus,
@@ -27,9 +27,14 @@ export function validateJobTransition(
     const allowed = VALID_TRANSITIONS[current];
 
     if (!allowed.has(next)) {
-        throw new DomainException(
-            'INVALID_JOB_TRANSITION',
-            `Cannot transition job status from ${current} to ${next}`,
-        );
+        throw new InvalidTransitionError(current, next);
     }
+}
+
+/**
+ * Builds the deterministic S3 output key for a transcode profile.
+ * Locked per D-006: outputs/{jobId}/{profile}.mp4
+ */
+export function buildOutputKey(jobId: string, profile: string): string {
+    return `outputs/${jobId}/${profile}.mp4`;
 }

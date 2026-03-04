@@ -308,13 +308,159 @@
 ---
 
 ### ISSUE-5: Worker v0 (ffmpeg 720p)
-- **Goal:** Worker consumes SQS, transcodes, uploads output, updates DB.
-- **Key decision:** deterministic output keys + output dedupe for retry safety.
+- **Goal:** Worker consumes SQS, transcodes via ffmpeg, uploads output to S3, updates DB status.
+- **Key decisions:**
+  - Shared Prisma client via npm workspaces (`packages/db`) — D-013
+  - FFmpeg installed at OS level in Worker Dockerfile (Alpine `apk add ffmpeg`) — D-014
+  - SQS long polling (`WaitTimeSeconds: 20`) — D-015
+  - Deterministic output keys (`outputs/{jobId}/{profile}.mp4`) + output dedupe for retry safety — D-006
+  - Worker owns `vtaas-outputs` bucket; API remains ignorant of it
+  - `job.rules.ts` (state machine) lives in `packages/db` — single source of truth for both API and Worker
 
-Sub-issues (planned):
-- 5.1 Deterministic output key scheme + output dedupe (required for failure drills)
-- 5.2 Worker state transitions (PROCESSING -> SUCCEEDED/FAILED)
-- 5.3 End-to-end test: upload -> job -> output exists -> status SUCCEEDED
+#### 5.0 Monorepo & Worker Scaffold — ⬜ Planned
+- **Git Branch:** `feat/issue-5.0-worker-scaffold`
+- **Work:**
+  1. **npm Workspaces:** Add `"workspaces": ["packages/*", "api", "worker"]` to root `package.json`
+  2. **Shared Prisma package (`packages/db`):**
+     - Create `packages/db/package.json` (name: `@vtaas/db`, deps: `@prisma/client`, devDeps: `prisma`)
+     - Move `api/prisma/` → `packages/db/prisma/` (schema + migrations)
+     - Move `api/src/jobs/job.rules.ts` and `api/src/jobs/job.rules.spec.ts` → `packages/db/src/`
+     - Add scripts: `generate`, `migrate:dev`, `migrate:deploy`
+  3. **Update API:**
+     - Remove `@prisma/client` and `prisma` from `api/package.json`; add `"@vtaas/db": "*"`
+     - Remove `prisma:generate` / `prisma:migrate` scripts from `api/package.json`
+     - Update import path for `job.rules.ts` in `api/src/jobs/jobs.service.ts` (if used)
+  4. **Worker NestJS standalone app (`worker/`):**
+     - Create `worker/package.json` (name: `vtaas-worker`, deps: `@nestjs/common`, `@nestjs/core`, `@aws-sdk/client-s3`, `@aws-sdk/client-sqs`, `@vtaas/db`, `reflect-metadata`, `rxjs`)
+     - Create `worker/tsconfig.json` (same compiler options as API)
+     - Create `worker/src/main.ts` — `NestFactory.createApplicationContext(WorkerModule)` (no HTTP server)
+     - Create `worker/src/worker.module.ts` — root module (imports: `PrismaModule`, `S3Module`, `SqsConsumerModule`)
+     - Create `worker/src/common/prisma.service.ts` and `worker/src/common/prisma.module.ts` (copy of API's 14-line `PrismaService` — separate DI context)
+     - Create `worker/.dockerignore`
+  5. **Worker Dockerfile (`worker/Dockerfile`):**
+     - Multi-stage build (same pattern as `api/Dockerfile`)
+     - Build context: repo root (to access `packages/db`)
+     - Runtime stage: `apk add --no-cache ffmpeg` (D-014)
+     - Healthcheck: `ffmpeg -version > /dev/null 2>&1 || exit 1`
+     - Entrypoint: `node worker/dist/main.js`
+  6. **Update API Dockerfile (`api/Dockerfile`):**
+     - Change build context to repo root for `packages/db` access
+     - Use `--workspace=api --workspace=@vtaas/db` for `npm ci`
+     - Copy `packages/db/` and run `prisma generate` from shared package
+  7. **Update `docker-compose.yml`:**
+     - Change `api` build context from `./api` to `.` (repo root); set `dockerfile: api/Dockerfile`
+     - Add `worker` service: build context `.`, dockerfile `worker/Dockerfile`, env vars (`DATABASE_URL`, `AWS_ENDPOINT_URL`, `AWS_REGION`, `SQS_QUEUE_NAME`), `depends_on` db + localstack
+  8. **Run root `npm install`** to generate workspace-aware `package-lock.json`
+  9. Verify `docker compose build` succeeds for both api and worker
+  10. Verify `cd api && npm test` still passes (no regression from monorepo restructure)
+- **Commit:** `feat: restructure monorepo with npm workspaces and worker scaffold`
+- **Push:** `feat/issue-5.0-worker-scaffold`
+- **AC:** `docker compose build` succeeds; `docker compose up` starts all 5 services (db, localstack, api, web, worker); `docker exec vtaas_worker ffmpeg -version` returns version info; API tests still pass; `curl localhost:3000/api/health` returns `{"status":"ok"}`
+- **Proof:** `docker compose ps` shows all services healthy; `docker exec vtaas_worker ffmpeg -version` output; API test output
+- **Rollback:** Revert to single-app structure; remove `packages/` and `worker/`; restore `api/prisma/`
+
+#### 5.1 SQS Consumer & Output Dedupe — ⬜ Planned
+- **Git Branch:** `feat/issue-5.1-sqs-consumer`
+- **Work:**
+  1. **Worker S3 Service (`worker/src/s3/s3.service.ts`):**
+     - `WorkerS3Service implements OnModuleInit`
+     - `onModuleInit`: create `vtaas-outputs` bucket if missing (idempotent, same `HeadBucket → CreateBucket` pattern as API)
+     - `getObject(bucket, key)`: download file from S3, return `Buffer`
+     - `putObject(bucket, key, body, contentType)`: upload file to S3
+     - `headObject(bucket, key)`: returns `ObjectMetadata | null` (returns `null` on 404, does NOT throw — used for dedupe where "not found" is the happy path)
+     - Create `worker/src/s3/s3.module.ts` (`@Global()`)
+  2. **SQS Consumer (`worker/src/sqs-consumer/sqs-consumer.service.ts`):**
+     - `SqsConsumerService implements OnModuleInit`
+     - `onModuleInit`: resolve queue URL, start polling loop
+     - `poll()`: `ReceiveMessageCommand` with `WaitTimeSeconds: 20` (D-015), `MaxNumberOfMessages: 1`
+     - On message: parse body as `TranscodePayload` (D-007), delegate to `TranscodeService.processJob()`
+     - On success: `DeleteMessageCommand` (remove from queue)
+     - On failure: log error, do NOT delete (message returns after `VisibilityTimeout` expiry for retry)
+     - Loop continues indefinitely; graceful shutdown via `OnModuleDestroy`
+     - Create `worker/src/sqs-consumer/sqs-consumer.module.ts`
+  3. **Deterministic output key helper:**
+     - Add `buildOutputKey(jobId: string, profile: string): string` → `outputs/{jobId}/{profile}.mp4` to `packages/db/src/job.rules.ts`
+     - Unit test in `packages/db/src/job.rules.spec.ts`
+  4. **Unit tests:**
+     - `worker/src/s3/s3.service.spec.ts` — bucket creation, getObject, putObject, headObject (returns null on 404)
+     - `worker/src/sqs-consumer/sqs-consumer.service.spec.ts` — polling, message parsing, delete on success, no-delete on failure
+- **Commit:** `feat: add SQS consumer with long polling and S3 dedupe support`
+- **Push:** `feat/issue-5.1-sqs-consumer`
+- **AC:** Worker starts, logs "Polling SQS..."; `awslocal s3 ls` shows `vtaas-outputs` bucket; unit tests pass; worker does not crash when queue is empty (long poll gracefully times out and retries)
+- **Proof:** Worker startup logs; `awslocal s3 ls` output; unit test output
+- **Rollback:** Remove consumer and S3 modules from worker
+
+#### 5.2 Transcode Execution & State Transitions — ⬜ Planned
+- **Git Branch:** `feat/issue-5.2-transcode`
+- **Work:**
+  1. **FFmpeg wrapper (`worker/src/transcode/ffmpeg.service.ts`):**
+     - `FfmpegService.transcode(inputPath, outputPath, profile)`
+     - Builds ffmpeg args for `720p` profile: `-vf scale=-2:720 -c:v libx264 -preset fast -crf 23 -c:a aac`
+     - Executes via `child_process.execFile('ffmpeg', args)` — NOT `exec` (avoids shell injection)
+     - Returns `Promise<void>` — resolves on exit code 0, rejects with stderr on non-zero
+     - Logs stderr for debugging
+  2. **Transcode orchestrator (`worker/src/transcode/transcode.service.ts`):**
+     - `TranscodeService.processJob(payload: TranscodePayload)`:
+       1. **Transition DB: `PENDING → PROCESSING`** via `validateJobTransition()` from `packages/db`
+       2. **For each profile** in `payload.profiles` (currently `['720p']`):
+          a. Build output key via `buildOutputKey(jobId, profile)` → `outputs/{jobId}/720p.mp4`
+          b. **Dedupe check:** `s3Service.headObject('vtaas-outputs', outputKey)` — if exists, log "skipping" and continue
+          c. **Download input:** `s3Service.getObject('vtaas-inputs', inputKey)` → write to `/tmp/vtaas/{jobId}/input.{ext}`
+          d. **Execute ffmpeg:** `ffmpegService.transcode(inputPath, outputPath, profile)`
+          e. **Upload output:** read file from `/tmp/vtaas/{jobId}/720p.mp4` → `s3Service.putObject('vtaas-outputs', outputKey, body, 'video/mp4')`
+       3. **Collect output keys** as JSON array (e.g., `["outputs/{jobId}/720p.mp4"]`)
+       4. **Transition DB: `PROCESSING → SUCCEEDED`**, set `outputKeys`
+       5. **Clean up** `/tmp/vtaas/{jobId}/` directory
+     - **Error handling (any failure):**
+       1. **Transition DB: `PROCESSING → FAILED`**, set `error` message
+       2. **Clean up** temp files
+       3. **Re-throw** error so SQS consumer does NOT delete the message (allows retry up to `maxReceiveCount`, then DLQ)
+  3. **Job status update helper (`worker/src/transcode/transcode.service.ts`):**
+     - `updateJobStatus(jobId, currentStatus, nextStatus, data?)`:
+       - Calls `validateJobTransition(current, next)` from `packages/db`
+       - Calls `prisma.job.update({ where: { id }, data: { status, ...data } })`
+  4. **Wire `TranscodeService` and `FfmpegService` into `WorkerModule`**
+  5. **Unit tests:**
+     - `worker/src/transcode/transcode.service.spec.ts`:
+       - Happy path: download → ffmpeg → upload → SUCCEEDED (all mocked)
+       - Dedupe path: headObject returns metadata → ffmpeg NOT called → SUCCEEDED
+       - Error path: ffmpeg fails → FAILED status → error re-thrown
+       - Temp file cleanup in all paths
+     - `worker/src/transcode/ffmpeg.service.spec.ts`:
+       - Correct args for 720p profile
+       - Exit code 0 → resolves
+       - Non-zero exit code → rejects with stderr
+- **Commit:** `feat: add transcode pipeline with ffmpeg execution and state transitions`
+- **Push:** `feat/issue-5.2-transcode`
+- **AC:** Worker picks up SQS message, transitions job `PENDING → PROCESSING → SUCCEEDED`, uploads output to `vtaas-outputs`, sets `outputKeys` in DB; on failure, job transitions to `FAILED`; all unit tests pass
+- **Proof:** Worker logs showing full flow; `awslocal s3 ls s3://vtaas-outputs/outputs/{jobId}/` shows `720p.mp4`; DB query shows `SUCCEEDED` status; unit test output
+- **Rollback:** Remove `TranscodeService` and `FfmpegService`; worker starts but does nothing with messages
+
+#### 5.3 End-to-End Verification — ⬜ Planned
+- **Git Branch:** `feat/issue-5.3-e2e-test`
+- **Work:**
+  1. **Extend `scripts/test-jobs-flow.sh`** with 4 new steps after existing Step 8:
+     - **Step 9 — Wait for worker processing:**
+       - Poll `GET /api/jobs/{id}` every 2 seconds, up to 60-second timeout
+       - Wait until `status` is `SUCCEEDED` or `FAILED`
+       - Fail test if timeout reached (worker may not be running or processing is stuck)
+     - **Step 10 — Verify final status is SUCCEEDED:**
+       - Assert `status === "SUCCEEDED"` from `GET /api/jobs/{id}`
+     - **Step 11 — Verify outputKeys populated:**
+       - Assert `outputKeys` contains `"outputs/{jobId}/720p.mp4"` from `GET /api/jobs/{id}`
+     - **Step 12 — Verify output exists in S3:**
+       - `curl -I http://localhost:4566/vtaas-outputs/outputs/{jobId}/720p.mp4`
+       - Assert HTTP 200 (file was uploaded by worker)
+  2. **Update script header comment** to reflect the new scope: presign → upload → create job → idempotency → GET → SQS → worker processing → SUCCEEDED → S3 output
+  3. **Note:** The test file (`/tmp/vtaas-test-job.bin`) is 10KB of zeros — NOT a real video. ffmpeg will likely fail on this. Options:
+     - Generate a minimal valid video using ffmpeg: `ffmpeg -f lavfi -i testsrc=duration=1:size=320x240:rate=1 -c:v libx264 /tmp/vtaas-test-video.mp4`
+     - Or create the test video inside the script before uploading
+     - **This is critical** — switching the test file from dummy binary to a real (tiny) video
+- **Commit:** `feat: extend integration test for full worker pipeline verification`
+- **Push:** `feat/issue-5.3-e2e-test`
+- **AC:** `./scripts/test-jobs-flow.sh` completes all 12 steps end-to-end; final output shows "ALL CHECKS PASSED"
+- **Proof:** Full script output showing each step passing
+- **Rollback:** Revert new steps in test script; existing Steps 1–8 remain functional
 
 ---
 

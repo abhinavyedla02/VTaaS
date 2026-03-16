@@ -39,6 +39,10 @@ docker compose ps
 # View API logs
 docker logs -f vtaas_api
 
+# View worker logs
+# Worker auto-starts SQS polling on boot, logs "Worker started" then "Polling SQS..."
+docker logs -f vtaas_worker
+
 # View web logs
 docker logs -f vtaas_web
 
@@ -161,3 +165,4 @@ Pre-existing code quality violations tracked for future cleanup. These predate t
 | Strict Type Safety | `dev-user.interceptor.spec.ts` | 9 | `let mockRequest: any` — use typed mock | Low |
 | Logging Standard | `logging.interceptor.ts` | 34 | `console.log(...)` — switch to NestJS `Logger` | Medium |
 | Logging Standard | `dev-user.interceptor.ts` | 35 | `console.warn(...)` — switch to NestJS `Logger` | Medium |
+| TOCTOU Race | `transcode.service.ts` | — | `processJob` uses read-then-write (`findUnique` → `validateJobTransition` → `update`). Safe in Phase 0 — `VisibilityTimeout` prevents concurrent processing — but Phase 2 should use optimistic locking (`Prisma updateMany` with `WHERE status = 'PENDING'`) | Low |

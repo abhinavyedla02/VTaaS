@@ -1,15 +1,18 @@
 #!/usr/bin/env bash
 #
-# Integration test: presign → upload → create job → idempotency → GET → SQS verify
-# Requires: Docker Compose running, curl, jq, awslocal
+# Integration test (13 steps): presign → upload → create job → idempotency → GET →
+#   SQS verify → poll worker completion → assert SUCCEEDED → assert outputKeys →
+#   assert S3 output exists
+# Requires: Docker Compose running, curl, jq, awslocal, ffmpeg
 #
 set -euo pipefail
 
 API_URL="${API_URL:-http://localhost:3000}"
 AWS_ENDPOINT="${AWS_ENDPOINT:-http://localhost:4566}"
 BUCKET="vtaas-inputs"
+OUTPUTS_BUCKET="vtaas-outputs"
 QUEUE_NAME="${SQS_QUEUE_NAME:-transcode-jobs}"
-TEST_FILE="/tmp/vtaas-test-job.bin"
+TEST_FILE="/tmp/vtaas-test-video.mp4"
 
 # Colors
 GREEN='\033[0;32m'
@@ -46,12 +49,14 @@ echo "=========================================="
 echo ""
 
 # -----------------------------------------------------------
-# Step 1: Create a dummy test file (10KB)
+# Step 1: Generate a real minimal test video using ffmpeg
 # -----------------------------------------------------------
-info "Creating 10KB test file..."
-dd if=/dev/zero of="$TEST_FILE" bs=1024 count=10 2>/dev/null
+info "Generating real H.264 test video via ffmpeg..."
+command -v ffmpeg >/dev/null 2>&1 || fail "Missing dependency: ffmpeg"
+ffmpeg -f lavfi -i testsrc=duration=1:size=320x240:rate=1 \
+    -c:v libx264 "$TEST_FILE" -y 2>/dev/null
 FILE_SIZE=$(wc -c <"$TEST_FILE" | tr -d ' ')
-pass "Test file created (${FILE_SIZE} bytes)"
+pass "Test video generated (${FILE_SIZE} bytes): ${TEST_FILE}"
 
 # -----------------------------------------------------------
 # Step 2: Presign upload URL
@@ -181,12 +186,70 @@ else
 fi
 
 # -----------------------------------------------------------
+# Step 9: Poll for worker completion
+# -----------------------------------------------------------
+info "Polling GET ${API_URL}/api/jobs/${JOB_ID} for worker completion (up to 60s)..."
+POLL_TIMEOUT=60
+POLL_INTERVAL=2
+ELAPSED=0
+FINAL_STATUS=""
+while [ "$ELAPSED" -lt "$POLL_TIMEOUT" ]; do
+    POLL_RESPONSE=$(curl -s "${API_URL}/api/jobs/${JOB_ID}")
+    FINAL_STATUS=$(echo "$POLL_RESPONSE" | jq -r '.status')
+    if [ "$FINAL_STATUS" = "SUCCEEDED" ] || [ "$FINAL_STATUS" = "FAILED" ]; then
+        break
+    fi
+    info "  status: ${FINAL_STATUS} — waiting ${POLL_INTERVAL}s... (${ELAPSED}s elapsed)"
+    sleep "$POLL_INTERVAL"
+    ELAPSED=$((ELAPSED + POLL_INTERVAL))
+done
+
+if [ "$ELAPSED" -ge "$POLL_TIMEOUT" ] && [ "$FINAL_STATUS" != "SUCCEEDED" ] && [ "$FINAL_STATUS" != "FAILED" ]; then
+    fail "Timeout: job ${JOB_ID} did not reach a terminal state within ${POLL_TIMEOUT}s (last status: ${FINAL_STATUS})"
+fi
+pass "Worker completed in ~${ELAPSED}s (status: ${FINAL_STATUS})"
+
+# -----------------------------------------------------------
+# Step 10: Assert SUCCEEDED
+# -----------------------------------------------------------
+info "Asserting job status is SUCCEEDED..."
+if [ "$FINAL_STATUS" != "SUCCEEDED" ]; then
+    echo -e "${RED}✗ Job status is ${FINAL_STATUS} (expected SUCCEEDED). Full response:${NC}"
+    echo "$POLL_RESPONSE" | jq .
+    exit 1
+fi
+pass "Job status is SUCCEEDED"
+
+# -----------------------------------------------------------
+# Step 11: Assert outputKeys populated
+# -----------------------------------------------------------
+info "Asserting outputKeys contains outputs/${JOB_ID}/720p.mp4..."
+EXPECTED_OUTPUT_KEY="outputs/${JOB_ID}/720p.mp4"
+OUTPUT_KEY_MATCH=$(echo "$POLL_RESPONSE" | jq -r ".outputKeys[]" 2>/dev/null | grep -F "$EXPECTED_OUTPUT_KEY" || echo "")
+if [ -z "$OUTPUT_KEY_MATCH" ]; then
+    fail "outputKeys does not contain \"${EXPECTED_OUTPUT_KEY}\". Full response: $(echo \"$POLL_RESPONSE\" | jq .)"
+fi
+pass "outputKeys contains ${EXPECTED_OUTPUT_KEY}"
+
+# -----------------------------------------------------------
+# Step 12: Assert S3 output object exists
+# -----------------------------------------------------------
+info "Checking S3 output object at ${AWS_ENDPOINT}/${OUTPUTS_BUCKET}/${EXPECTED_OUTPUT_KEY}..."
+S3_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+    "${AWS_ENDPOINT}/${OUTPUTS_BUCKET}/${EXPECTED_OUTPUT_KEY}")
+if [ "$S3_STATUS" -eq 200 ]; then
+    pass "S3 output object exists (HTTP ${S3_STATUS})"
+else
+    fail "S3 output object NOT found (HTTP ${S3_STATUS}). Expected: ${AWS_ENDPOINT}/${OUTPUTS_BUCKET}/${EXPECTED_OUTPUT_KEY}"
+fi
+
+# -----------------------------------------------------------
 # Cleanup
 # -----------------------------------------------------------
 rm -f "$TEST_FILE"
 
 echo ""
 echo "=========================================="
-echo -e "  ${GREEN}ALL CHECKS PASSED${NC}"
+echo -e "  ${GREEN}ALL CHECKS PASSED (Steps 1–13)${NC}"
 echo "=========================================="
 echo ""

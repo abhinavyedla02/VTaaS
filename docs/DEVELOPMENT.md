@@ -9,6 +9,18 @@
 
 ---
 
+## First-time setup note
+
+After cloning, build the shared `@vtaas/db` package before TypeScript can resolve its types locally:
+
+```bash
+npm run build --workspace=@vtaas/db
+```
+
+This generates `packages/db/dist/`. Docker handles this automatically during `docker compose build` — this step is only needed for local `tsc`/IDE type resolution.
+
+---
+
 ## Quickstart (current state)
 
 ### Start services
@@ -59,6 +71,10 @@ docker compose up -d api
 # Rebuild web after code changes
 docker compose build web
 docker compose up -d web
+
+# Rebuild worker after code changes
+docker compose build worker
+docker compose up -d worker
 
 # Stop all services
 docker compose down
@@ -146,9 +162,9 @@ The SDK auto-detects real AWS and routes `SqsService`/`S3Service` calls to the c
 
 ### Deployment Timeline
 
-> **Do not deploy to the public internet until Phase 6 (Guardrails) is complete.**
+> **Do not deploy to the public internet until the Abuse Guard issue (Phase 2, Issue 7) is complete.**
 
-Without Issue 6.1 (strict file size limits) and 6.2 (rate limiting), bots can upload massive files and trigger unbounded FFmpeg jobs, running up compute and storage bills. The internet scans every public IP within hours — "security by obscurity" (not sharing the link) does not work.
+Without rate limiting, file size caps, and video duration enforcement, bots can upload massive files and trigger unbounded FFmpeg jobs, running up compute and storage bills. The internet scans every public IP within hours — "security by obscurity" (not sharing the link) does not work.
 
 **Safe order:** Phase 4 (Queues) → Phase 5 (Worker) → Phase 6 (Guardrails) → Deploy.
 

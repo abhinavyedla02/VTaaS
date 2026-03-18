@@ -173,3 +173,34 @@
 - **Decision:** Defer `app.enableCors()` until Phase 4 (Frontend). Not a blocker for Phase 1 backend work.
 - **Rationale:** Adding CORS now would be untestable without a frontend. We'll configure it with explicit origin restrictions when the frontend exists.
 - **Consequence:** `curl` and integration scripts are unaffected; only browser requests need CORS.
+
+---
+
+### D-017 — `@vtaas/db` Compiled Entry Point (Docker Production)
+- **Status:** Decided (implemented)
+- **Context:** `packages/db/package.json` originally had `"main": "src/index.ts"`. This works for `ts-jest` (which handles `.ts` directly) but breaks Node at runtime in Docker — Node cannot execute `.ts` files.
+- **Decision:**
+  - `"main": "dist/index.js"` and `"types": "dist/index.d.ts"` in `packages/db/package.json`
+  - `"build": "tsc"` script added to `packages/db`
+  - Dockerfiles compile `@vtaas/db` in the **build stage only**: `RUN npm run build --workspace=@vtaas/db`
+  - Runtime stage copies pre-compiled `dist/` from build stage: `COPY --from=build /app/packages/db/dist ./packages/db/dist`
+- **Rationale:** Recompiling in the runtime stage fails because `devDependencies` (`@types/jest`) are excluded by `--omit=dev`, causing `tsc` to fail on spec files. The correct multi-stage pattern is compile once, copy the artifact.
+- **Consequence:** Any change to `packages/db/src/` requires rebuilding the package locally (`npm run build --workspace=@vtaas/db`) before `tsc` resolves types in `api/` or `worker/`. Docker handles this automatically during `docker compose build`.
+
+---
+
+### D-018 — TOCTOU Race on Job Status Transition
+- **Status:** Known limitation — Phase 0 acceptable, Phase 2 fix planned
+- **Context:** `TranscodeService.processJob` uses a read-then-write pattern: `findUnique` → `validateJobTransition` → `job.update`. Two workers processing the same message simultaneously could both read `PENDING` and both attempt the `PENDING → PROCESSING` transition.
+- **Why safe in Phase 0:** SQS `VisibilityTimeout: 300` prevents any second worker from seeing the message while the first is processing. Duplicate concurrent processing is practically impossible in single-worker deployments.
+- **Phase 2 fix:** Replace with optimistic locking — `prisma.job.updateMany({ where: { id, status: 'PENDING' }, data: { status: 'PROCESSING' } })` and assert `count === 1`. If `count === 0`, another worker got there first; discard the message.
+- **Consequence:** Acceptable risk in Phase 0. Must be addressed before scaling to multiple worker instances.
+
+---
+
+### D-019 — Worker SQS Consumer Fire-and-Forget Bootstrap
+- **Status:** Decided (implemented)
+- **Context:** `SqsConsumerService.onModuleInit()` must start an infinite polling loop without blocking NestJS module initialization.
+- **Decision:** `void this.startPolling()` — intentional fire-and-forget. The `void` operator explicitly discards the returned `Promise`, signaling intent to any reader.
+- **Rationale:** If `onModuleInit` awaited `startPolling()`, the NestJS bootstrap sequence would never complete — the app would hang indefinitely before becoming healthy.
+- **Consequence:** Unhandled errors in the polling loop must be caught internally (they are — `poll()` has its own `try/catch`). The loop is self-contained and does not surface errors to the NestJS lifecycle.

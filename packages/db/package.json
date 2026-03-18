@@ -2,7 +2,10 @@
     "name": "@vtaas/db",
     "private": true,
     "version": "0.1.0",
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
     "scripts": {
+        "build": "tsc",
         "generate": "prisma generate",
         "migrate:dev": "prisma migrate dev",
         "migrate:deploy": "prisma migrate deploy",

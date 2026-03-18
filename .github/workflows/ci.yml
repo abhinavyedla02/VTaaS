@@ -1,0 +1,110 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────
+  # Job A: Unit tests + TypeScript typecheck across all workspaces
+  # ─────────────────────────────────────────────────────────────────
+  test:
+    name: Test + Typecheck
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # Cache ~/.npm between runs — avoids re-downloading packages every run
+      - name: Cache npm
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Required before tsc can resolve @vtaas/db types (D-017)
+      # generate must run before build — prisma generate emits @prisma/client types
+      - name: Generate Prisma client
+        run: npm run generate --workspace=@vtaas/db
+
+      - name: Build @vtaas/db
+        run: npm run build --workspace=@vtaas/db
+
+      - name: Run all tests
+        run: npm run test --workspaces --if-present
+
+      - name: Typecheck api/
+        run: npx tsc --noEmit
+        working-directory: api
+
+      - name: Typecheck worker/
+        run: npx tsc --noEmit
+        working-directory: worker
+
+      - name: Typecheck packages/db/
+        run: npx tsc --noEmit
+        working-directory: packages/db
+
+  # ─────────────────────────────────────────────────────────────────
+  # Job B: Build Docker images (validates Dockerfile correctness)
+  # Uses GHA layer cache to keep rebuilds fast after the first run
+  # ─────────────────────────────────────────────────────────────────
+  docker-build:
+    name: Docker Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build API image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: api/Dockerfile
+          push: false
+          tags: vtaas-api:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build Worker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: worker/Dockerfile
+          push: false
+          tags: vtaas-worker:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ─────────────────────────────────────────────────────────────────
+  # Job C: Lint
+  # ESLint is not yet configured in this repo.
+  # Enable this job once .eslintrc.* files are added (Issue 7+).
+  # ─────────────────────────────────────────────────────────────────
+  # lint:
+  #   name: Lint
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-node@v4
+  #       with:
+  #         node-version: '20'
+  #     - run: npm ci
+  #     - run: npm run lint --workspaces --if-present

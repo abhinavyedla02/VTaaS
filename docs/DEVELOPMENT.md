@@ -21,6 +21,23 @@ This generates `packages/db/dist/`. Docker handles this automatically during `do
 
 ---
 
+## First run after clone
+
+The database starts empty. Before running the integration test, apply migrations:
+
+```bash
+docker compose up -d
+docker compose exec api sh -c "cd /app && npx prisma migrate deploy \
+  --schema=packages/db/prisma/schema.prisma"
+```
+
+This only needs to be done once per fresh Docker volume.
+If you run `docker compose down -v`, you'll need to run it again.
+
+> The unit tests (run via `npm test --workspaces --if-present`) do **not** need a real DB — they mock everything. The migration step is only required before running `./scripts/test-jobs-flow.sh` (the integration test).
+
+---
+
 ## Quickstart (current state)
 
 ### Start services

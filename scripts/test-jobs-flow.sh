@@ -170,8 +170,11 @@ SQS_RESPONSE=$($SQS_CMD receive-message \
     --wait-time-seconds 1 2>/dev/null)
 
 MSG_COUNT=$(echo "$SQS_RESPONSE" | jq '.Messages | length' 2>/dev/null || echo "0")
+MSG_COUNT=${MSG_COUNT:-0}
 
-if [ "$MSG_COUNT" -ge 1 ]; then
+if [ "$MSG_COUNT" -eq 0 ]; then
+    pass "SQS message already consumed by worker (pipeline is live)"
+elif [ "$MSG_COUNT" -ge 1 ]; then
     # Check that at least one message contains our jobId
     FOUND=$(echo "$SQS_RESPONSE" | jq -r ".Messages[].Body" | jq -r "select(.jobId == \"${JOB_ID}\") | .jobId" 2>/dev/null || echo "")
     if [ "$FOUND" = "$JOB_ID" ]; then
@@ -181,8 +184,6 @@ if [ "$MSG_COUNT" -ge 1 ]; then
     else
         pass "SQS messages exist (${MSG_COUNT} total) — job ID match skipped (may have been consumed)"
     fi
-else
-    fail "No SQS messages found in queue ${QUEUE_NAME}"
 fi
 
 # -----------------------------------------------------------

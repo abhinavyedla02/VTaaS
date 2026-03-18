@@ -7,6 +7,7 @@ COPY api/package.json api/
 RUN npm ci --workspace=api --workspace=@vtaas/db
 COPY packages/db/ packages/db/
 RUN npm run generate --workspace=@vtaas/db
+RUN npm run build --workspace=@vtaas/db
 COPY api/tsconfig.json api/
 COPY api/src/ api/src/
 RUN npm run build --workspace=api
@@ -21,6 +22,7 @@ COPY api/package.json api/
 RUN npm ci --omit=dev --workspace=api --workspace=@vtaas/db
 COPY packages/db/ packages/db/
 RUN npm run generate --workspace=@vtaas/db
+COPY --from=build /app/packages/db/dist ./packages/db/dist
 COPY --from=build /app/api/dist ./api/dist
 EXPOSE 3000
 CMD ["node", "api/dist/main.js"]

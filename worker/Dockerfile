@@ -7,6 +7,7 @@ COPY worker/package.json worker/
 RUN npm ci --workspace=worker --workspace=@vtaas/db
 COPY packages/db/ packages/db/
 RUN npm run generate --workspace=@vtaas/db
+RUN npm run build --workspace=@vtaas/db
 COPY worker/tsconfig.json worker/
 COPY worker/src/ worker/src/
 RUN npm run build --workspace=worker
@@ -25,6 +26,7 @@ COPY worker/package.json worker/
 RUN npm ci --omit=dev --workspace=worker --workspace=@vtaas/db
 COPY packages/db/ packages/db/
 RUN npm run generate --workspace=@vtaas/db
+COPY --from=build /app/packages/db/dist ./packages/db/dist
 COPY --from=build /app/worker/dist ./worker/dist
 
 # Healthcheck: verify ffmpeg is available (D-014)

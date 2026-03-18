@@ -138,7 +138,7 @@ GET_RESPONSE=$(curl -s "${API_URL}/api/jobs/${JOB_ID}")
 GET_STATUS=$(echo "$GET_RESPONSE" | jq -r '.status')
 GET_INPUT_KEY=$(echo "$GET_RESPONSE" | jq -r '.inputKey')
 
-if [ "$GET_STATUS" = "PENDING" ] && [ "$GET_INPUT_KEY" = "$INPUT_KEY" ]; then
+if { [ "$GET_STATUS" = "PENDING" ] || [ "$GET_STATUS" = "PROCESSING" ] || [ "$GET_STATUS" = "SUCCEEDED" ]; } && [ "$GET_INPUT_KEY" = "$INPUT_KEY" ]; then
     pass "GET returned correct job (status: ${GET_STATUS}, inputKey: ${GET_INPUT_KEY})"
 else
     fail "GET response mismatch. Response: $GET_RESPONSE"

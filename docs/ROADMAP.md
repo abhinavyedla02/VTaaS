@@ -122,7 +122,7 @@ A visitor lands on the portfolio page, sees a sleek upload form, drops a short v
 #### 5.1 SQS Consumer & Output Dedupe — ✅ Done
 #### 5.2 Transcode Execution & State Transitions — ✅ Done
 
-#### 5.3 End-to-End Verification — ⬜ Next
+#### 5.3 End-to-End Verification — ✅ Done
 - **Git Branch:** `feat/issue-5.3-e2e-verify`
 - **Prerequisite gate:** Verify `@vtaas/db` `main` field resolves correctly in Docker production build before any other step.
   - **Issue:** `packages/db/package.json` has `"main": "src/index.ts"` — a TypeScript path. The Dockerfiles do not compile `@vtaas/db` separately (`npm run generate` only runs `prisma generate`, not `tsc`). At runtime, Node resolves `require('@vtaas/db')` → `src/index.ts` → crash (Node cannot execute `.ts` files).
@@ -130,13 +130,14 @@ A visitor lands on the portfolio page, sees a sleek upload form, drops a short v
 - **Work:**
   1. Fix the `@vtaas/db` Docker build issue (prerequisite gate above)
   2. Generate a minimal test video: `ffmpeg -f lavfi -i testsrc=duration=1:size=320x240:rate=1 -c:v libx264 /tmp/vtaas-test-video.mp4`
-  3. Extend `scripts/test-jobs-flow.sh` with 4 new steps:
+  3. Extend `scripts/test-jobs-flow.sh` with new steps:
      - **Step 9:** Poll `GET /api/jobs/{id}` every 2s, 60s timeout, until `SUCCEEDED` or `FAILED`
      - **Step 10:** Assert status is `SUCCEEDED`
      - **Step 11:** Assert `outputKeys` contains `outputs/{jobId}/720p.mp4`
-     - **Step 12:** Assert S3 output exists via `curl -I http://localhost:4566/vtaas-outputs/outputs/{jobId}/720p.mp4`
-- **AC:** `./scripts/test-jobs-flow.sh` completes all 12 steps; final output shows "ALL CHECKS PASSED"
-- **Proof:** Full script output showing each step passing
+     - **Step 12:** Assert S3 output exists via `curl http://localhost:4566/vtaas-outputs/outputs/{jobId}/720p.mp4`
+     - **Step 13:** (renumbered from above)
+- **AC:** `./scripts/test-jobs-flow.sh` completes all 13 steps; final output shows "ALL CHECKS PASSED"
+- **Proof:** `./scripts/test-jobs-flow.sh` — ALL CHECKS PASSED (Steps 1–13)
 - **Rollback:** Revert new steps; existing Steps 1–8 remain functional
 
 ---

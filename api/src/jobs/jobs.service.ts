@@ -18,6 +18,8 @@ export interface GetJobResponse {
 export interface CreateJobResponse {
     id: string;
     status: string;
+    submitterName?: string | null;
+    note?: string | null;
 }
 
 @Injectable()
@@ -30,14 +32,19 @@ export class JobsService {
         private readonly sqsService: SqsService,
     ) { }
 
-    async createJob(userId: string, inputKey: string): Promise<CreateJobResponse> {
+    async createJob(
+        userId: string,
+        inputKey: string,
+        submitterName?: string,
+        note?: string,
+    ): Promise<CreateJobResponse> {
         // 1. Verify file exists in S3 (throws OBJECT_NOT_FOUND if missing)
         await this.s3Service.headObject(inputKey);
 
         try {
             // 2. Create job row (status defaults to PENDING via schema)
             const job = await this.prisma.job.create({
-                data: { userId, inputKey },
+                data: { userId, inputKey, submitterName, note },
             });
 
             // 3. Enqueue transcode message (gated by ENQUEUE_ENABLED)
@@ -53,7 +60,12 @@ export class JobsService {
             }
 
             this.logger.log(`Job created: ${job.id} (status: ${job.status})`);
-            return { id: job.id, status: job.status };
+            return {
+                id: job.id,
+                status: job.status,
+                submitterName: job.submitterName,
+                note: job.note,
+            };
 
         } catch (error: unknown) {
             // 4. Idempotency: duplicate (userId, inputKey) → return existing job
@@ -73,7 +85,12 @@ export class JobsService {
                 }
 
                 this.logger.log(`Duplicate job request — returning existing: ${existing.id}`);
-                return { id: existing.id, status: existing.status };
+                return {
+                    id: existing.id,
+                    status: existing.status,
+                    submitterName: existing.submitterName,
+                    note: existing.note,
+                };
             }
 
             throw error; // re-throw non-P2002 errors

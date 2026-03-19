@@ -4,6 +4,15 @@ import { WorkerS3Service } from '../s3/s3.service';
 import { FfmpegService } from './ffmpeg.service';
 import { JobStatus } from '@prisma/client';
 import * as fs from 'fs';
+import { execFile } from 'child_process';
+
+jest.mock('child_process', () => {
+    const actual = jest.requireActual('child_process');
+    return {
+        ...actual,
+        execFile: jest.fn(),
+    };
+});
 
 // Mock only fs.promises — preserve the rest of fs (Prisma client uses fs.existsSync at import)
 jest.mock('fs', () => {
@@ -82,6 +91,13 @@ describe('TranscodeService', () => {
         jest.mocked(fs.promises.writeFile).mockResolvedValue(undefined);
         jest.mocked(fs.promises.readFile).mockResolvedValue(Buffer.from('output-video'));
         jest.mocked(fs.promises.rm).mockResolvedValue(undefined);
+
+        // Reset execFile to succeed with duration < 60
+        jest.mocked(execFile).mockImplementation((...args: any[]) => {
+            const cb = args[args.length - 1];
+            cb(null, { stdout: JSON.stringify({ format: { duration: '30.0' } }) }, '');
+            return {} as any;
+        });
     });
 
     it('happy path — full sequence PENDING→PROCESSING→SUCCEEDED, outputKeys set', async () => {
@@ -128,9 +144,9 @@ describe('TranscodeService', () => {
 
         await service.processJob(payload);
 
-        // ffmpeg and S3 download should NOT be called
+        // ffmpeg should NOT be called (but S3 download is called unconditionally now)
         expect(mockFfmpeg.transcode).not.toHaveBeenCalled();
-        expect(mockS3.getObject).not.toHaveBeenCalled();
+        expect(mockS3.getObject).toHaveBeenCalled();
 
         // Transition to SUCCEEDED still happens with the dedupe key
         expect(mockPrisma.job.update).toHaveBeenCalledWith({
@@ -221,6 +237,60 @@ describe('TranscodeService', () => {
         expect(jest.mocked(fs.promises.rm)).toHaveBeenCalledWith(
             '/tmp/vtaas/job-123',
             { recursive: true, force: true },
+        );
+    });
+
+    it('duration over limit → job marked FAILED with VIDEO_TOO_LONG, ffmpeg NOT called', async () => {
+        mockPrisma.job.findUnique.mockResolvedValue(pendingJob);
+        mockS3.getObject.mockResolvedValue(Buffer.from('input-video'));
+        jest.mocked(execFile).mockImplementation((...args: any[]) => {
+            const cb = args[args.length - 1];
+            cb(null, { stdout: JSON.stringify({ format: { duration: '65.5' } }) }, '');
+            return {} as any;
+        });
+
+        await service.processJob(payload);
+
+        expect(mockPrisma.job.update).toHaveBeenCalledWith({
+            where: { id: 'job-123' },
+            data: { status: JobStatus.FAILED, error: 'VIDEO_TOO_LONG: video exceeds 60 second limit' },
+        });
+        expect(mockFfmpeg.transcode).not.toHaveBeenCalled();
+    });
+
+    it('ffprobe throws → warning logged, transcode proceeds', async () => {
+        mockPrisma.job.findUnique.mockResolvedValue(pendingJob);
+        mockS3.getObject.mockResolvedValue(Buffer.from('input-video'));
+        mockS3.headObject.mockResolvedValue(null);
+        jest.mocked(execFile).mockImplementation((...args: any[]) => {
+            const cb = args[args.length - 1];
+            cb(new Error('ffprobe missing'), null, '');
+            return {} as any;
+        });
+
+        await service.processJob(payload);
+
+        expect(mockFfmpeg.transcode).toHaveBeenCalled();
+        expect(mockPrisma.job.update).toHaveBeenCalledWith(
+            expect.objectContaining({ data: expect.objectContaining({ status: JobStatus.SUCCEEDED }) })
+        );
+    });
+
+    it('ffprobe returns malformed JSON → warning logged, transcode proceeds', async () => {
+        mockPrisma.job.findUnique.mockResolvedValue(pendingJob);
+        mockS3.getObject.mockResolvedValue(Buffer.from('input-video'));
+        mockS3.headObject.mockResolvedValue(null);
+        jest.mocked(execFile).mockImplementation((...args: any[]) => {
+            const cb = args[args.length - 1];
+            cb(null, { stdout: '{ bad json }' }, '');
+            return {} as any;
+        });
+
+        await service.processJob(payload);
+
+        expect(mockFfmpeg.transcode).toHaveBeenCalled();
+        expect(mockPrisma.job.update).toHaveBeenCalledWith(
+            expect.objectContaining({ data: expect.objectContaining({ status: JobStatus.SUCCEEDED }) })
         );
     });
 });

@@ -110,6 +110,7 @@ docker compose down -v
 | `REQUEST_LOGGING_ENABLED` | Enable/disable JSON request logs | `true` |
 | `MAX_UPLOAD_SIZE_BYTES` | Max file size for uploads | `524288000` (500MB) |
 | `UPLOAD_EXPIRY_SECONDS` | Presigned URL expiry time | `900` (15min) |
+| `MAX_VIDEO_DURATION_SECONDS` | Maximum allowed video length | `60` |
 | `AWS_ENDPOINT_URL` | LocalStack endpoint | `http://localstack:4566` (Docker) |
 | `AWS_REGION` | AWS region for S3/SQS client | `us-east-1` |
 | `SQS_QUEUE_NAME` | Main transcode queue | `transcode-jobs` |

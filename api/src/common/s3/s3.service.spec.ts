@@ -5,6 +5,7 @@ import {
     HeadObjectCommand,
     CreateBucketCommand,
     PutBucketCorsCommand,
+    DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
 import { DomainException } from '../exceptions';
 
@@ -139,6 +140,29 @@ describe('S3Service', () => {
     describe('getBucket', () => {
         it('should return the bucket name', () => {
             expect(service.getBucket()).toBe('vtaas-inputs');
+        });
+    });
+
+    describe('deleteObject', () => {
+        it('should delete object successfully', async () => {
+            mockSend.mockResolvedValueOnce({});
+            await service.deleteObject('my-bucket', 'my-key');
+            expect(mockSend).toHaveBeenCalledWith(expect.any(DeleteObjectCommand));
+        });
+
+        it('should silently succeed on NoSuchKey/404', async () => {
+            const notFoundError = new Error('NoSuchKey');
+            notFoundError.name = 'NoSuchKey';
+            mockSend.mockRejectedValueOnce(notFoundError);
+            
+            await expect(service.deleteObject('my-bucket', 'my-key')).resolves.not.toThrow();
+        });
+
+        it('should rethrow unexpected errors', async () => {
+            const unexpectedError = new Error('Connection refused');
+            mockSend.mockRejectedValueOnce(unexpectedError);
+            
+            await expect(service.deleteObject('my-bucket', 'my-key')).rejects.toThrow('Connection refused');
         });
     });
 });

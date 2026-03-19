@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { JobsController } from './jobs.controller';
 import { JobsService, CreateJobResponse, GetJobResponse } from './jobs.service';
 import { DomainException } from '../common/exceptions';
@@ -29,6 +30,7 @@ describe('JobsController', () => {
         };
 
         const module: TestingModule = await Test.createTestingModule({
+            imports: [ThrottlerModule.forRoot([{ limit: 3, ttl: 3600000 }])],
             controllers: [JobsController],
             providers: [
                 { provide: JobsService, useValue: mockJobsService },
@@ -40,11 +42,17 @@ describe('JobsController', () => {
 
     describe('create', () => {
         it('should delegate to jobsService.createJob with userId and inputKey', async () => {
-            await controller.create('test-user', { inputKey: 'inputs/test.mp4' });
+            await controller.create('test-user', { 
+                inputKey: 'inputs/test.mp4', 
+                submitterName: 'Alice', 
+                note: 'Test' 
+            });
 
             expect(mockJobsService.createJob).toHaveBeenCalledWith(
                 'test-user',
                 'inputs/test.mp4',
+                'Alice',
+                'Test'
             );
         });
 

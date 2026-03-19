@@ -6,6 +6,7 @@ import {
     CreateBucketCommand,
     PutBucketCorsCommand,
     PutObjectCommand,
+    DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { DomainException } from '../exceptions';
@@ -118,5 +119,34 @@ export class S3Service implements OnModuleInit {
 
     getBucket(): string {
         return this.bucket;
+    }
+
+    async deleteObject(bucket: string, key: string): Promise<void> {
+        try {
+            await this.client.send(
+                new DeleteObjectCommand({
+                    Bucket: bucket,
+                    Key: key,
+                }),
+            );
+            this.logger.log(`Deleted s3://${bucket}/${key}`);
+        } catch (error: unknown) {
+            const s3Error = error as { 
+                name?: string; 
+                $metadata?: { httpStatusCode?: number };
+                message?: string;
+            };
+            if (
+                s3Error.name === 'NoSuchKey' ||
+                s3Error.name === 'NotFound' ||
+                s3Error.$metadata?.httpStatusCode === 404
+            ) {
+                this.logger.log(`Skipped missing object: s3://${bucket}/${key}`);
+                return;
+            }
+            const msg = error instanceof Error ? error.message : String(error);
+            this.logger.error(`Failed to delete s3://${bucket}/${key}: ${msg}`);
+            throw error;
+        }
     }
 }

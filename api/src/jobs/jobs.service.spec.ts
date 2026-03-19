@@ -21,6 +21,8 @@ describe('JobsService', () => {
         requestId: null,
         outputKeys: null,
         error: null,
+        submitterName: 'Alice',
+        note: 'Test Note',
         createdAt: new Date(),
         updatedAt: new Date(),
     };
@@ -77,12 +79,17 @@ describe('JobsService', () => {
         });
 
         it('should create a PENDING job and return { id, status }', async () => {
-            const result = await service.createJob('test-user', 'inputs/test-uuid.mp4');
+            const result = await service.createJob('test-user', 'inputs/test-uuid.mp4', 'Alice', 'Test Note');
 
             expect(mockPrisma.job.create).toHaveBeenCalledWith({
-                data: { userId: 'test-user', inputKey: 'inputs/test-uuid.mp4' },
+                data: { userId: 'test-user', inputKey: 'inputs/test-uuid.mp4', submitterName: 'Alice', note: 'Test Note' },
             });
-            expect(result).toEqual({ id: 'job-uuid-123', status: 'PENDING' });
+            expect(result).toEqual({ 
+                id: 'job-uuid-123', 
+                status: 'PENDING',
+                submitterName: 'Alice',
+                note: 'Test Note'
+            });
         });
 
         it('should NOT create job if file does not exist in S3', async () => {
@@ -138,12 +145,17 @@ describe('JobsService', () => {
         it('should return existing job on duplicate (P2002)', async () => {
             mockPrisma.job.create.mockRejectedValueOnce(p2002Error);
 
-            const result = await service.createJob('test-user', 'inputs/test-uuid.mp4');
+            const result = await service.createJob('test-user', 'inputs/test-uuid.mp4', 'Alice', 'Test');
 
             expect(mockPrisma.job.findUnique).toHaveBeenCalledWith({
                 where: { user_input_unique: { userId: 'test-user', inputKey: 'inputs/test-uuid.mp4' } },
             });
-            expect(result).toEqual({ id: 'job-uuid-123', status: 'PENDING' });
+            expect(result).toEqual({ 
+                id: 'job-uuid-123', 
+                status: 'PENDING',
+                submitterName: 'Alice',
+                note: 'Test Note'
+            });
         });
 
         it('should NOT enqueue on duplicate', async () => {

@@ -204,3 +204,30 @@
 - **Decision:** `void this.startPolling()` — intentional fire-and-forget. The `void` operator explicitly discards the returned `Promise`, signaling intent to any reader.
 - **Rationale:** If `onModuleInit` awaited `startPolling()`, the NestJS bootstrap sequence would never complete — the app would hang indefinitely before becoming healthy.
 - **Consequence:** Unhandled errors in the polling loop must be caught internally (they are — `poll()` has its own `try/catch`). The loop is self-contained and does not surface errors to the NestJS lifecycle.
+
+### D-020: IP Rate Limiting Strategy
+- Status: Decided (implemented)
+- Package: @nestjs/throttler v6.5.0
+- Config: 3 requests per hour per IP (ttl: 3600000ms, limit: 3)
+- Applied to: POST /api/uploads and POST /api/jobs only
+- NOT applied to: GET /api/health, GET /api/jobs/:id
+- Storage: in-memory (acceptable for single-instance portfolio deployment)
+- Known limitation: rate limit state resets on API restart
+- Custom guard: FastifyThrottlerGuard extends ThrottlerGuard, overrides getTracker to read req.ip for Fastify compatibility
+
+### D-021: Video Duration Limit
+- Status: Decided (implemented)
+- Check: ffprobe in worker, runs after S3 download, before ffmpeg
+- Limit: MAX_VIDEO_DURATION_SECONDS env var (default: 60)
+- Error code: VIDEO_TOO_LONG
+- Fail-safe: ffprobe errors are swallowed — don't block valid videos
+- Early return does NOT re-throw — SQS deletes the message (validation failure, not transient error)
+
+### D-022: Ephemeral Data Cleanup
+- Status: Decided (implemented)
+- Package: @nestjs/schedule v6.1.1
+- Schedule: hourly cron ('0 * * * *')
+- Retention: 24 hours
+- Scope: deletes S3 inputs + outputs first, then DB record
+- Safety: skips PROCESSING jobs, idempotent on missing S3 objects
+- Rationale: protect Neon free tier row limit + prevent S3 cost accumulation at portfolio scale

@@ -79,6 +79,7 @@ services:
       - SQS_MAX_RECEIVE_COUNT=3
       - AWS_ACCESS_KEY_ID=test
       - AWS_SECRET_ACCESS_KEY=test
+      - MAX_VIDEO_DURATION_SECONDS=60
     depends_on:
       db:
         condition: service_healthy

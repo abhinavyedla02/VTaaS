@@ -8,9 +8,17 @@ import { S3Module } from './common/s3/s3.module';
 import { SqsModule } from './common/sqs/sqs.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { JobsModule } from './jobs/jobs.module';
+import { ThrottlerModule } from '@nestjs/throttler';
 
 @Module({
-  imports: [PrismaModule, S3Module, SqsModule, UploadsModule, JobsModule],
+  imports: [
+    PrismaModule, 
+    S3Module, 
+    SqsModule, 
+    UploadsModule, 
+    JobsModule,
+    ThrottlerModule.forRoot([{ limit: 3, ttl: 3600000 }]),
+  ],
   controllers: [HealthController],
   providers: [
     {

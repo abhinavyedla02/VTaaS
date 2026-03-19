@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { UploadsController } from './uploads.controller';
 import { UploadsService, UploadUrlResponse } from './uploads.service';
 
@@ -18,6 +19,7 @@ describe('UploadsController', () => {
         } as any;
 
         const module: TestingModule = await Test.createTestingModule({
+            imports: [ThrottlerModule.forRoot([{ limit: 3, ttl: 3600000 }])],
             controllers: [UploadsController],
             providers: [
                 { provide: UploadsService, useValue: mockUploadsService },

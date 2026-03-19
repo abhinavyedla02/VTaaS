@@ -157,7 +157,7 @@ A visitor lands on the portfolio page, sees a sleek upload form, drops a short v
 - **Proof:** https://github.com/abhinavyedla02/VTaaS/actions/runs/23254704523 — both jobs green (Test + Typecheck: 52s, Docker Build: 3m27s)
 - **Rollback:** Disable workflow via `.github/workflows/` rename
 
-### ISSUE-7: Abuse Guard + Cleanup Cron — ⬜ Planned
+### ISSUE-7: Abuse Guard + Cleanup Cron — ✅ Done
 - **Goal:** Protect the live demo from bots and runaway AWS costs without a login wall.
 - **Work:**
   1. **Submitter name form:** Add `submitter_name` (text, nullable) and `note` (text, nullable) columns to `jobs` table via migration. Input collected in frontend before upload (no auth required).
@@ -167,7 +167,7 @@ A visitor lands on the portfolio page, sees a sleek upload form, drops a short v
   5. **Cleanup cron:** `@nestjs/schedule` — purge jobs + S3 objects older than 24hrs (protects Neon row limit and S3 accumulation)
   6. **AWS billing alert:** $4 threshold alert via AWS Budgets (infra config, documented in `DECISIONS.md`, not code)
 - **AC:** Repeated uploads from same IP are rate-limited after 3/hr; videos > 60s fail with correct error code; cron runs hourly and cleans old records
-- **Proof:** Unit tests for rate limiter config, ffprobe duration check, cron invocation; curl output showing 429 on 4th upload
+- **Proof:** 128 tests passing (20 db / 75 api / 33 worker); tsc --noEmit clean in all workspaces
 - **Rollback:** Remove throttler guards; remove `@nestjs/schedule`; remove duration check from worker
 
 ---

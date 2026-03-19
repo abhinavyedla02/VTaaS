@@ -25,6 +25,8 @@ model Job {
   inputKey     String    @map("input_key")
   outputKeys   Json?     @map("output_keys")
   error        String?   @map("error")
+  submitterName String?  @map("submitter_name")
+  note         String?   @map("note")
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
 

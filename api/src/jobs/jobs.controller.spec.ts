@@ -40,11 +40,17 @@ describe('JobsController', () => {
 
     describe('create', () => {
         it('should delegate to jobsService.createJob with userId and inputKey', async () => {
-            await controller.create('test-user', { inputKey: 'inputs/test.mp4' });
+            await controller.create('test-user', { 
+                inputKey: 'inputs/test.mp4', 
+                submitterName: 'Alice', 
+                note: 'Test' 
+            });
 
             expect(mockJobsService.createJob).toHaveBeenCalledWith(
                 'test-user',
                 'inputs/test.mp4',
+                'Alice',
+                'Test'
             );
         });
 

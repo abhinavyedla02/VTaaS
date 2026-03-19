@@ -9,7 +9,7 @@ export class JobsController {
 
     @Post()
     async create(@User() userId: string, @Body() dto: CreateJobDto) {
-        return this.jobsService.createJob(userId, dto.inputKey);
+        return this.jobsService.createJob(userId, dto.inputKey, dto.submitterName, dto.note);
     }
 
     @Get(':id')

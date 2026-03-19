@@ -148,13 +148,13 @@ A visitor lands on the portfolio page, sees a sleek upload form, drops a short v
 
 ---
 
-### ISSUE-6: CI v1 (GitHub Actions) — ⬜ Planned
+### ISSUE-6: CI v1 (GitHub Actions) — ✅ Done
 - **Work:**
   1. GitHub Actions workflow: lint, typecheck, all tests across all workspaces
   2. Build API and Worker Docker images (validates Dockerfile correctness)
   3. Include contract tests for `GET /api/jobs/:id` response shape
 - **AC:** PRs to `main` are gated by green CI; Docker images build successfully in CI
-- **Proof:** GitHub Actions run showing all checks green
+- **Proof:** https://github.com/abhinavyedla02/VTaaS/actions/runs/23254704523 — both jobs green (Test + Typecheck: 52s, Docker Build: 3m27s)
 - **Rollback:** Disable workflow via `.github/workflows/` rename
 
 ### ISSUE-7: Abuse Guard + Cleanup Cron — ⬜ Planned

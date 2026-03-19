@@ -9,6 +9,8 @@ import { SqsModule } from './common/sqs/sqs.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { JobsModule } from './jobs/jobs.module';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { ScheduleModule } from '@nestjs/schedule';
+import { CleanupModule } from './cleanup/cleanup.module';
 
 @Module({
   imports: [
@@ -18,6 +20,8 @@ import { ThrottlerModule } from '@nestjs/throttler';
     UploadsModule, 
     JobsModule,
     ThrottlerModule.forRoot([{ limit: 3, ttl: 3600000 }]),
+    ScheduleModule.forRoot(),
+    CleanupModule,
   ],
   controllers: [HealthController],
   providers: [

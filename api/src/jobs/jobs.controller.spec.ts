@@ -19,6 +19,7 @@ describe('JobsController', () => {
         status: 'PENDING',
         inputKey: 'inputs/test-uuid.mp4',
         outputKeys: null,
+        downloadUrl: null,
         error: null,
         updatedAt: new Date(),
     };
@@ -52,7 +53,8 @@ describe('JobsController', () => {
                 'test-user',
                 'inputs/test.mp4',
                 'Alice',
-                'Test'
+                'Test',
+                undefined
             );
         });
 

@@ -1,11 +1,28 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import './DemoWidget.css';
 
-type DemoStatus = 'idle' | 'requesting' | 'uploading' | 'creating-job' | 'done' | 'error';
+type DemoStatus =
+  | 'idle'
+  | 'requesting'
+  | 'uploading'
+  | 'creating-job'
+  | 'polling'
+  | 'succeeded'
+  | 'failed'
+  | 'error';
 
-interface JobResult {
+interface JobResponse {
   id: string;
-  status: string;
+  status: 'PENDING' | 'PROCESSING' | 'SUCCEEDED' | 'FAILED';
+  inputKey: string;
+  outputKeys: string[] | null;
+  downloadUrl: string | null;
+  error: string | null;
+  updatedAt: string;
+}
+
+function fixLocalUrl(url: string): string {
+  return url.replace('http://localstack:4566', 'http://localhost:4566');
 }
 
 function getActiveStep(status: DemoStatus): number {
@@ -14,19 +31,23 @@ function getActiveStep(status: DemoStatus): number {
     case 'requesting': return 2;
     case 'uploading': return 2;
     case 'creating-job': return 3;
-    case 'done': return 4;
+    case 'polling': return 3;
+    case 'succeeded': return 3;
+    case 'failed': return 0;
     case 'error': return 0;
   }
 }
 
 function isStepCompleted(step: number, status: DemoStatus): boolean {
   const active = getActiveStep(status);
-  if (status === 'error') return false;
+  if (status === 'error' || status === 'failed') return false;
+  if (status === 'succeeded') return step <= 3;
   return step < active;
 }
 
 const ACCEPTED_TYPES = new Set(['video/mp4', 'video/quicktime', 'video/webm']);
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
+const POLL_INTERVAL_MS = 2000;
 
 function validateFile(f: File): string | null {
   if (!ACCEPTED_TYPES.has(f.type)) {
@@ -40,13 +61,83 @@ function validateFile(f: File): string | null {
 
 export default function DemoWidget() {
   const [submitterName, setSubmitterName] = useState('');
+  const [resolution, setResolution] = useState('720p');
   const [file, setFile] = useState<File | null>(null);
   const [status, setStatus] = useState<DemoStatus>('idle');
   const [message, setMessage] = useState('');
-  const [jobResult, setJobResult] = useState<JobResult | null>(null);
+  const [jobResponse, setJobResponse] = useState<JobResponse | null>(null);
   const [dragging, setDragging] = useState(false);
+  const pollRef = useRef<number | null>(null);
 
   const isBusy = status === 'requesting' || status === 'uploading' || status === 'creating-job';
+  const isPolling = status === 'polling';
+  const isTerminal = status === 'succeeded' || status === 'failed';
+
+  // Cleanup polling on unmount or terminal state
+  useEffect(() => {
+    return () => {
+      if (pollRef.current !== null) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    };
+  }, []);
+
+  const stopPolling = useCallback(() => {
+    if (pollRef.current !== null) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }, []);
+
+  const startPolling = useCallback((jobId: string) => {
+    stopPolling();
+    setStatus('polling');
+    setMessage('Waiting for worker to pick up job…');
+
+    const intervalId = window.setInterval(async () => {
+      try {
+        const res = await fetch(`/api/jobs/${jobId}`);
+        if (!res.ok) {
+          throw new Error(`Failed to poll job status (${res.status})`);
+        }
+        const data: JobResponse = await res.json();
+        setJobResponse(data);
+
+        if (data.status === 'PROCESSING') {
+          setMessage('Transcoding in progress…');
+        } else if (data.status === 'SUCCEEDED') {
+          stopPolling();
+          setStatus('succeeded');
+          setMessage('Transcode complete!');
+        } else if (data.status === 'FAILED') {
+          stopPolling();
+          setStatus('failed');
+          setMessage(data.error ?? 'Transcode failed.');
+        }
+      } catch (err: unknown) {
+        stopPolling();
+        setStatus('error');
+        if (err instanceof Error) {
+          setMessage(err.message);
+        } else {
+          setMessage('An unexpected error occurred while polling.');
+        }
+      }
+    }, POLL_INTERVAL_MS);
+
+    pollRef.current = intervalId;
+  }, [stopPolling]);
+
+  const resetAll = useCallback(() => {
+    stopPolling();
+    setSubmitterName('');
+    setResolution('720p');
+    setFile(null);
+    setStatus('idle');
+    setMessage('');
+    setJobResponse(null);
+  }, [stopPolling]);
 
   const selectFile = useCallback((f: File) => {
     const error = validateFile(f);
@@ -58,7 +149,7 @@ export default function DemoWidget() {
     setFile(f);
     setStatus('idle');
     setMessage('');
-    setJobResult(null);
+    setJobResponse(null);
   }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -115,8 +206,7 @@ export default function DemoWidget() {
       setStatus('uploading');
       setMessage('Uploading to S3…');
 
-      // Replace internal docker hostname with localhost for local dev
-      const uploadUrl = url.replace('http://localstack:4566', 'http://localhost:4566');
+      const uploadUrl = fixLocalUrl(url);
 
       const putRes = await fetch(uploadUrl, {
         method: 'PUT',
@@ -135,7 +225,7 @@ export default function DemoWidget() {
       const jobRes = await fetch('/api/jobs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ inputKey, submitterName: submitterName.trim() }),
+        body: JSON.stringify({ inputKey, submitterName: submitterName.trim(), resolution }),
       });
 
       if (!jobRes.ok) {
@@ -145,9 +235,18 @@ export default function DemoWidget() {
 
       const job: { id: string; status: string } = await jobRes.json();
 
-      setJobResult({ id: job.id, status: job.status });
-      setStatus('done');
-      setMessage('Job created — transcoding will begin shortly.');
+      setJobResponse({
+        id: job.id,
+        status: job.status as JobResponse['status'],
+        inputKey,
+        outputKeys: null,
+        downloadUrl: null,
+        error: null,
+        updatedAt: new Date().toISOString(),
+      });
+
+      // Start polling for status updates
+      startPolling(job.id);
     } catch (err: unknown) {
       setStatus('error');
       if (err instanceof Error) {
@@ -164,8 +263,14 @@ export default function DemoWidget() {
     { num: 3, label: 'Transcode' },
   ];
 
+  const showUploadForm = !isPolling && !isTerminal;
+
   const statusVariant: 'info' | 'success' | 'error' =
-    status === 'error' ? 'error' : status === 'done' ? 'success' : 'info';
+    status === 'error' || status === 'failed'
+      ? 'error'
+      : status === 'succeeded'
+        ? 'success'
+        : 'info';
 
   return (
     <section className="demo section" id="demo">
@@ -178,10 +283,12 @@ export default function DemoWidget() {
           {steps.map((s) => {
             const completed = isStepCompleted(s.num, status);
             const active = getActiveStep(status) === s.num && !completed;
+            const pulsing = active && isPolling;
             const className = [
               'demo-step',
               active ? 'active' : '',
               completed ? 'completed' : '',
+              pulsing ? 'pulsing' : '',
             ].filter(Boolean).join(' ');
 
             return (
@@ -195,84 +302,191 @@ export default function DemoWidget() {
           })}
         </div>
 
-        {/* Name input */}
-        <div className="demo-field-group">
-          <label className="demo-label" htmlFor="submitter-name">
-            Your Name
-          </label>
-          <input
-            id="submitter-name"
-            className="demo-input"
-            type="text"
-            placeholder="e.g. Jane Doe"
-            value={submitterName}
-            onChange={(e) => setSubmitterName(e.target.value)}
-            disabled={isBusy}
-            maxLength={100}
-          />
-        </div>
+        {/* Upload form — hidden during polling/terminal states */}
+        {showUploadForm && (
+          <>
+            {/* Name input */}
+            <div className="demo-field-group">
+              <label className="demo-label" htmlFor="submitter-name">
+                Your Name
+              </label>
+              <input
+                id="submitter-name"
+                className="demo-input"
+                type="text"
+                placeholder="e.g. Jane Doe"
+                value={submitterName}
+                onChange={(e) => setSubmitterName(e.target.value)}
+                disabled={isBusy}
+                maxLength={100}
+              />
+            </div>
 
-        {/* File picker */}
-        <div
-          className={[
-            'demo-file-zone',
-            isBusy ? 'disabled' : '',
-            file ? 'has-file' : '',
-            dragging ? 'dragging' : '',
-          ].filter(Boolean).join(' ')}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-        >
-          <input
-            className="demo-file-input"
-            type="file"
-            accept="video/mp4,video/quicktime,video/webm"
-            onChange={handleFileChange}
-            disabled={isBusy}
-          />
-          {file ? (
-            <>
-              <span className="demo-file-icon">🎬</span>
-              <span className="demo-file-name">{file.name}</span>
-            </>
-          ) : (
-            <>
-              <span className="demo-file-icon">📁</span>
-              <span className="demo-file-text">
-                Drop a video or click to browse
-              </span>
-              <span className="demo-file-text" style={{ fontSize: 'var(--text-xs)', marginTop: 'var(--space-xs)' }}>
-                MP4, MOV, or WebM · max 20 MB
-              </span>
-            </>
-          )}
-        </div>
+            {/* Resolution selector */}
+            <div className="demo-field-group">
+              <label className="demo-label" htmlFor="resolution">
+                Output Resolution
+              </label>
+              <select
+                id="resolution"
+                className="demo-select"
+                value={resolution}
+                onChange={(e) => setResolution(e.target.value)}
+                disabled={isBusy}
+              >
+                <option value="240p">240p</option>
+                <option value="360p">360p</option>
+                <option value="480p">480p</option>
+                <option value="720p">720p (default)</option>
+                <option value="1080p">1080p</option>
+              </select>
+            </div>
 
-        {/* Upload button */}
-        <button
-          className="demo-upload-btn"
-          onClick={handleUpload}
-          disabled={!file || !submitterName.trim() || isBusy}
-        >
-          {isBusy ? 'Processing…' : 'Upload & Transcode'}
-        </button>
-
-        {/* Status message */}
-        {message && (
-          <div className={`demo-status ${statusVariant}`}>
-            {isBusy && <div className="demo-spinner" />}
-            {status === 'done' && <span className="demo-status-icon">✓</span>}
-            {status === 'error' && <span className="demo-status-icon">✕</span>}
-            <div className="demo-status-text">
-              {message}
-              {jobResult && (
+            {/* File picker */}
+            <div
+              className={[
+                'demo-file-zone',
+                isBusy ? 'disabled' : '',
+                file ? 'has-file' : '',
+                dragging ? 'dragging' : '',
+              ].filter(Boolean).join(' ')}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+            >
+              <input
+                className="demo-file-input"
+                type="file"
+                accept="video/mp4,video/quicktime,video/webm"
+                onChange={handleFileChange}
+                disabled={isBusy}
+              />
+              {file ? (
                 <>
-                  <br />
-                  Job ID: <code>{jobResult.id}</code> · Status: <code>{jobResult.status}</code>
+                  <span className="demo-file-icon">🎬</span>
+                  <span className="demo-file-name">{file.name}</span>
+                </>
+              ) : (
+                <>
+                  <span className="demo-file-icon">📁</span>
+                  <span className="demo-file-text">
+                    Drop a video or click to browse
+                  </span>
+                  <span className="demo-file-text" style={{ fontSize: 'var(--text-xs)', marginTop: 'var(--space-xs)' }}>
+                    MP4, MOV, or WebM · max 20 MB
+                  </span>
                 </>
               )}
             </div>
+
+            {/* Upload button */}
+            <button
+              className="demo-upload-btn"
+              onClick={handleUpload}
+              disabled={!file || !submitterName.trim() || isBusy}
+            >
+              {isBusy ? 'Processing…' : 'Upload & Transcode'}
+            </button>
+          </>
+        )}
+
+        {/* Polling / result view */}
+        {isPolling && (
+          <div className="demo-result">
+            <div className="demo-status info">
+              <div className="demo-spinner" />
+              <div className="demo-status-text">
+                {message}
+                {jobResponse && (
+                  <>
+                    <br />
+                    Job ID: <code>{jobResponse.id}</code> · Status: <code>{jobResponse.status}</code>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Succeeded — video player */}
+        {status === 'succeeded' && jobResponse?.downloadUrl && (
+          <div className="demo-result">
+            <div className="demo-status success">
+              <span className="demo-status-icon">✓</span>
+              <div className="demo-status-text">{message}</div>
+            </div>
+            <div className="demo-video-wrapper">
+              <video
+                className="demo-video"
+                src={fixLocalUrl(jobResponse.downloadUrl)}
+                controls
+                autoPlay
+                muted
+                playsInline
+              />
+            </div>
+            <div className="demo-actions">
+              <a
+                className="demo-download-btn"
+                href={fixLocalUrl(jobResponse.downloadUrl)}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                ↓ Download {resolution}
+              </a>
+              <button className="demo-reset-btn" onClick={resetAll}>
+                Start Over
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Succeeded but no download URL (edge case) */}
+        {status === 'succeeded' && (!jobResponse || !jobResponse.downloadUrl) && (
+          <div className="demo-result">
+            <div className="demo-status success">
+              <span className="demo-status-icon">✓</span>
+              <div className="demo-status-text">
+                Transcode complete, but no download URL available.
+              </div>
+            </div>
+            <div className="demo-actions">
+              <button className="demo-reset-btn" onClick={resetAll}>
+                Start Over
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Failed */}
+        {status === 'failed' && (
+          <div className="demo-result">
+            <div className="demo-status error">
+              <span className="demo-status-icon">✕</span>
+              <div className="demo-status-text">
+                {message}
+                {jobResponse && (
+                  <>
+                    <br />
+                    Job ID: <code>{jobResponse.id}</code>
+                  </>
+                )}
+              </div>
+            </div>
+            <div className="demo-actions">
+              <button className="demo-reset-btn" onClick={resetAll}>
+                Try Again
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Pre-poll status messages (requesting, uploading, creating-job) */}
+        {showUploadForm && message && (
+          <div className={`demo-status ${statusVariant}`}>
+            {isBusy && <div className="demo-spinner" />}
+            {status === 'error' && <span className="demo-status-icon">✕</span>}
+            <div className="demo-status-text">{message}</div>
           </div>
         )}
       </div>

@@ -13,7 +13,7 @@ export class JobsController {
     @Throttle({ default: { limit: 3, ttl: 3600000 } })
     @Post()
     async create(@User() userId: string, @Body() dto: CreateJobDto) {
-        return this.jobsService.createJob(userId, dto.inputKey, dto.submitterName, dto.note);
+        return this.jobsService.createJob(userId, dto.inputKey, dto.submitterName, dto.note, dto.resolution);
     }
 
     @Get(':id')

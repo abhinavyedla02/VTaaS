@@ -165,5 +165,19 @@ describe('S3Service', () => {
             await expect(service.deleteObject('my-bucket', 'my-key')).rejects.toThrow('Connection refused');
         });
     });
+
+    describe('getDownloadUrl', () => {
+        it('should return a presigned GET URL', async () => {
+            const url = await service.getDownloadUrl('vtaas-outputs', 'outputs/job-123/720p.mp4');
+
+            expect(url).toBe('https://presigned-url.example.com');
+        });
+
+        it('should accept a custom expiresIn parameter', async () => {
+            const url = await service.getDownloadUrl('vtaas-outputs', 'outputs/job-123/720p.mp4', 7200);
+
+            expect(url).toBe('https://presigned-url.example.com');
+        });
+    });
 });
 

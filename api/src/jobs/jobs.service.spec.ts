@@ -10,6 +10,7 @@ describe('JobsService', () => {
     let service: JobsService;
     let mockPrisma: { job: { create: jest.Mock; findUnique: jest.Mock } };
     let mockHeadObject: jest.Mock;
+    let mockGetDownloadUrl: jest.Mock;
     let mockEnqueueTranscode: jest.Mock;
     let savedEnqueueEnabled: string | undefined;
 
@@ -43,13 +44,15 @@ describe('JobsService', () => {
             contentType: 'video/mp4',
         });
 
+        mockGetDownloadUrl = jest.fn().mockResolvedValue('https://presigned-download-url.example.com');
+
         mockEnqueueTranscode = jest.fn().mockResolvedValue(undefined);
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 JobsService,
                 { provide: PrismaService, useValue: mockPrisma },
-                { provide: S3Service, useValue: { headObject: mockHeadObject } },
+                { provide: S3Service, useValue: { headObject: mockHeadObject, getDownloadUrl: mockGetDownloadUrl } },
                 { provide: SqsService, useValue: { enqueueTranscode: mockEnqueueTranscode } },
             ],
         }).compile();
@@ -188,7 +191,7 @@ describe('JobsService', () => {
     });
 
     describe('findById', () => {
-        it('should return job response when found', async () => {
+        it('should return job response with downloadUrl null when status is PENDING', async () => {
             mockPrisma.job.findUnique.mockResolvedValueOnce(mockJob);
 
             const result = await service.findById('job-uuid-123');
@@ -201,9 +204,11 @@ describe('JobsService', () => {
                 status: 'PENDING',
                 inputKey: 'inputs/test-uuid.mp4',
                 outputKeys: null,
+                downloadUrl: null,
                 error: null,
                 updatedAt: mockJob.updatedAt,
             });
+            expect(mockGetDownloadUrl).not.toHaveBeenCalled();
         });
 
         it('should return null when job does not exist', async () => {
@@ -212,6 +217,59 @@ describe('JobsService', () => {
             const result = await service.findById('nonexistent-id');
 
             expect(result).toBeNull();
+        });
+
+        it('should return downloadUrl when job is SUCCEEDED with outputKeys', async () => {
+            const succeededJob = {
+                ...mockJob,
+                status: 'SUCCEEDED',
+                outputKeys: ['outputs/job-uuid-123/720p.mp4'],
+            };
+            mockPrisma.job.findUnique.mockResolvedValueOnce(succeededJob);
+
+            const result = await service.findById('job-uuid-123');
+
+            expect(mockGetDownloadUrl).toHaveBeenCalledWith(
+                'vtaas-outputs',
+                'outputs/job-uuid-123/720p.mp4',
+            );
+            expect(result).toEqual({
+                id: 'job-uuid-123',
+                status: 'SUCCEEDED',
+                inputKey: 'inputs/test-uuid.mp4',
+                outputKeys: ['outputs/job-uuid-123/720p.mp4'],
+                downloadUrl: 'https://presigned-download-url.example.com',
+                error: null,
+                updatedAt: mockJob.updatedAt,
+            });
+        });
+
+        it('should return downloadUrl null when SUCCEEDED but outputKeys is null', async () => {
+            const succeededNoOutput = {
+                ...mockJob,
+                status: 'SUCCEEDED',
+                outputKeys: null,
+            };
+            mockPrisma.job.findUnique.mockResolvedValueOnce(succeededNoOutput);
+
+            const result = await service.findById('job-uuid-123');
+
+            expect(mockGetDownloadUrl).not.toHaveBeenCalled();
+            expect(result?.downloadUrl).toBeNull();
+        });
+
+        it('should return downloadUrl null when SUCCEEDED but outputKeys is empty array', async () => {
+            const succeededEmpty = {
+                ...mockJob,
+                status: 'SUCCEEDED',
+                outputKeys: [],
+            };
+            mockPrisma.job.findUnique.mockResolvedValueOnce(succeededEmpty);
+
+            const result = await service.findById('job-uuid-123');
+
+            expect(mockGetDownloadUrl).not.toHaveBeenCalled();
+            expect(result?.downloadUrl).toBeNull();
         });
     });
 });

@@ -11,6 +11,7 @@ export interface GetJobResponse {
     status: string;
     inputKey: string;
     outputKeys: Prisma.JsonValue | null;
+    downloadUrl: string | null;
     error: string | null;
     updatedAt: Date;
 }
@@ -37,6 +38,7 @@ export class JobsService {
         inputKey: string,
         submitterName?: string,
         note?: string,
+        resolution?: string,
     ): Promise<CreateJobResponse> {
         // 1. Verify file exists in S3 (throws OBJECT_NOT_FOUND if missing)
         await this.s3Service.headObject(inputKey);
@@ -53,7 +55,7 @@ export class JobsService {
                 await this.sqsService.enqueueTranscode({
                     jobId: job.id,
                     inputKey: job.inputKey,
-                    profiles: ['720p'],
+                    profiles: [resolution ?? '720p'],
                 });
             } else {
                 this.logger.warn(`ENQUEUE_ENABLED=false — skipping SQS dispatch for job ${job.id}`);
@@ -100,11 +102,26 @@ export class JobsService {
         const job = await this.prisma.job.findUnique({ where: { id } });
         if (!job) return null;
 
+        let downloadUrl: string | null = null;
+
+        if (
+            job.status === 'SUCCEEDED' &&
+            Array.isArray(job.outputKeys) &&
+            job.outputKeys.length > 0 &&
+            typeof job.outputKeys[0] === 'string'
+        ) {
+            downloadUrl = await this.s3Service.getDownloadUrl(
+                'vtaas-outputs',
+                job.outputKeys[0] as string,
+            );
+        }
+
         return {
             id: job.id,
             status: job.status,
             inputKey: job.inputKey,
             outputKeys: job.outputKeys,
+            downloadUrl,
             error: job.error,
             updatedAt: job.updatedAt,
         };

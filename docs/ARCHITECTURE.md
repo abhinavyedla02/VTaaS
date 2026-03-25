@@ -67,13 +67,37 @@ VTaaS (Video Transcode as a Service) is a queue-driven media pipeline. The syste
 ---
 
 ### Web (`web/`)
-**Tech:** React + Vite  
-**Current state:** API health monitoring and S3 Video Upload MVP
+**Tech:** React + Vite + TypeScript  
+**Port:** 5173 (dev), proxies `/api` to `http://localhost:3000`  
+**Current state:** Full single-page portfolio UI (Issue 8)
 
-**Responsibilities (Phase 0):**
+**Component architecture:**
+
+| Component | File | Purpose |
+|-----------|------|---------|
+| `Hero` | `Hero.tsx` | Title, subtitle, one-liner with gradient text and ambient glow |
+| `WhyThisExists` | `WhyThisExists.tsx` | Motivation section — frames the project as intentional engineering |
+| `DemoWidget` | `DemoWidget.tsx` | Upload flow: submitter name → file selection (drag-and-drop) → job creation |
+| `SystemDiagram` | `SystemDiagram.tsx` | Data-driven SVG pipeline diagram (two-row layout: processing + storage) |
+| `AboutStack` | `AboutStack.tsx` | 7-item tech stack grid |
+| `WhatsNext` | `WhatsNext.tsx` | Future-work section (AI, Auth, Observability) |
+
+**Design system:**
+- CSS variables in `App.css` — dark-mode-only, blue accent palette
+- Typography: Inter (sans) + JetBrains Mono (mono) via Google Fonts CDN
+- No CSS framework (vanilla CSS, no Tailwind)
+- Each component has a co-located `.css` file
+
+**System diagram:**
+- Static SVG rendered from data arrays (`NODES`, `EDGES`)
+- Two-row layout: processing pipeline (Browser → API → SQS → Worker) on top, storage (S3 inputs, S3 outputs) on bottom
+- Issue 10 will make this interactive
+
+**Responsibilities:**
 - Call API endpoints to request presigned upload + create jobs
 - Upload file directly to S3 using presigned URL
-- Poll API for job status and display outputs
+- Client-side file validation (type allowlist + 20MB size cap) before upload
+- Poll API for job status and display outputs (Issue 9)
 
 ---
 

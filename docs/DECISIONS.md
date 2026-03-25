@@ -231,3 +231,47 @@
 - Scope: deletes S3 inputs + outputs first, then DB record
 - Safety: skips PROCESSING jobs, idempotent on missing S3 objects
 - Rationale: protect Neon free tier row limit + prevent S3 cost accumulation at portfolio scale
+
+---
+
+### D-023: Vanilla CSS Variables Over Tailwind
+- **Status:** Decided (implemented)
+- **Context:** Issue 8 needed a design system for the portfolio UI. Tailwind, CSS Modules, and vanilla CSS were all options.
+- **Decision:** Vanilla CSS with custom properties (CSS variables) in `App.css`. One file defines all tokens (colors, spacing, typography, radii, transitions). Each component has a co-located `.css` file.
+- **Alternatives rejected:**
+  - Tailwind — adds a build dependency, config file, and class-name conventions for a project with 6 components. Overkill at this scale.
+  - CSS Modules — scoping isn't a problem with 6 components that never share class names
+- **Consequence:** Full control over the design system. No extra dependencies. Trade-off: no utility classes — all styles are written longhand.
+
+### D-024: Google Fonts via CDN (Not npm)
+- **Status:** Decided (implemented)
+- **Context:** The portfolio uses Inter and JetBrains Mono fonts.
+- **Decision:** Load via `<link>` tags in `index.html` pointing to Google Fonts CDN. Not installed as npm packages.
+- **Rationale:** CDN fonts are not application dependencies — they're static asset links identical to loading from a self-hosted URL. Adding `@fontsource/inter` would increase bundle size and node_modules complexity for zero benefit.
+- **Consequence:** Fonts require internet connectivity to load. Acceptable for a portfolio site.
+
+### D-025: Two-Row SVG Diagram Layout
+- **Status:** Decided (implemented — revised from initial single-row layout)
+- **Context:** The initial diagram placed all 6 nodes in a single horizontal row with S3 and SQS branching vertically above/below. Edge labels ("presigned PUT", "PUT output", "GET input") overlapped nodes and each other because diagonal arrows created tight collision zones in an 850×160 SVG viewBox.
+- **Decision:** Reorganized to a two-row layout (880×250 viewBox):
+  - Top row: processing pipeline (Browser → API → SQS → Worker) with ~190px horizontal gaps
+  - Bottom row: storage (S3 inputs, S3 outputs) vertically offset below
+  - Vertical arrows between rows with label offset support (`labelDx`/`labelDy`) for fine positioning
+- **Lesson learned:** For labeled graph visualizations, budget 2× the space you think you need. Edge labels need clear air on all sides — they can't share space with arrows or node borders.
+- **Consequence:** Diagram is readable at a glance on 1440px screens. No horizontal scroll.
+
+### D-026: Client-Side File Validation (Defense in Depth)
+- **Status:** Decided (implemented)
+- **Context:** The API already validates file type (D-009) and size (D-010) server-side. The question was whether to also validate client-side.
+- **Decision:** Added client-side validation in `DemoWidget.tsx`:
+  - Type check: `ACCEPTED_TYPES` Set matching the server allowlist (MP4, MOV, WebM)
+  - Size check: `MAX_FILE_SIZE = 20 * 1024 * 1024` (20MB), matching production `MAX_UPLOAD_SIZE_BYTES`
+- **Rationale:** Client-side validation gives instant feedback before a network round-trip. Server-side validation remains the authority — client-side is a UX optimization, not a security boundary.
+- **Consequence:** Users see "File too large" or "Unsupported file type" immediately on file selection, without waiting for the presign request to fail.
+
+### D-027: "Why This Exists" Framing Over Generic Badge
+- **Status:** Decided (implemented — replaced initial "Portfolio Project" pill)
+- **Context:** The initial Hero section had a "Portfolio Project" pill badge. During polish review, this framing was flagged as working against the goal — it signals "student project" rather than "intentional engineering."
+- **Decision:** Removed the pill entirely. Added a dedicated "Why This Exists" section between Hero and Demo that explains the architectural intent in 3–4 sentences: presigned uploads keep files off the API, SQS decouples dispatch from processing, Worker runs in its own Fargate task.
+- **Rationale:** Framing affects perception. A recruiter or engineer who reads "Portfolio Project" adjusts their expectations downward. One who reads "Every architectural decision has a reason" engages differently.
+- **Consequence:** The page leads with technical intent rather than a label.

@@ -178,13 +178,17 @@ A visitor lands on the portfolio page, sees a sleek upload form, drops a short v
 
 ---
 
-### ISSUE-8: Portfolio UI — ⬜ Planned
+### ISSUE-8: Portfolio UI — ✅ Done
 - **Work:**
-  1. Polish existing React + Vite `web/` app into a full portfolio page
-  2. Page sections: hero, live demo widget (step-by-step upload flow with submitter name field), system diagram, "About the Stack", "What's Next" (AI tier callout — see below)
-  3. Modern aesthetics — this is the first thing a recruiter or engineer sees
+  1. Replaced Issue 1.5 placeholder with full single-page portfolio layout
+  2. Six sections: Hero, "Why This Exists" (motivation hook), DemoWidget (step-by-step upload with submitter name field), SystemDiagram (two-row SVG pipeline), AboutStack (7-item tech grid), WhatsNext (3 future-work callouts)
+  3. Design system: CSS variables, dark-mode-only, Inter + JetBrains Mono via CDN, no CSS framework
+  4. Client-side file validation (type + 20MB size) alongside existing server-side checks
+  5. Proper drag-and-drop with visual hover feedback on the drop zone
 - **AC:** Single-page app loads, hero is polished, upload flow includes name field, all sections rendered
-- **Rollback:** Revert to basic upload MVP
+- **Proof:** `tsc --noEmit` clean; `npm run build` clean (43 modules); visual verification at 1440px — all diagram labels readable, no horizontal scroll
+- **Commit:** `9cfe031` — `feat(web): issue-8 portfolio UI rebuild` (17 files, +1491 −245)
+- **Rollback:** Revert to basic upload MVP (`git revert 9cfe031`)
 
 ### ISSUE-9: Job Status Polling + Video Player — ⬜ Planned
 - **Work:**

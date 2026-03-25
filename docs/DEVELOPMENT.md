@@ -102,6 +102,30 @@ docker compose down -v
 
 ---
 
+## Frontend Development
+
+The `web/` app can be run standalone (outside Docker Compose) for faster iteration:
+
+```bash
+cd web
+npm run dev       # starts Vite dev server on port 5173
+```
+
+**Port:** `http://localhost:5173`  
+**API proxy:** Vite proxies `/api` requests to `http://localhost:3000` (configured in `vite.config.ts`)
+
+> **Note:** The API must be running separately for the upload flow to work. Either start it via `docker compose up api db localstack` or run it locally.
+
+### Typecheck and build (run from `web/`, not root)
+
+```bash
+cd web
+npx tsc --noEmit    # typecheck only (no output)
+npm run build       # full production build (tsc + vite build)
+```
+
+---
+
 ## Environment Variables
 
 | Variable | Purpose | Default |

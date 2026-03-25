@@ -190,13 +190,23 @@ A visitor lands on the portfolio page, sees a sleek upload form, drops a short v
 - **Commit:** `9cfe031` — `feat(web): issue-8 portfolio UI rebuild` (17 files, +1491 −245)
 - **Rollback:** Revert to basic upload MVP (`git revert 9cfe031`)
 
-### ISSUE-9: Job Status Polling + Video Player — ⬜ Planned
+### ISSUE-9: Job Status Polling + Video Player + Resolution Selector — ✅ Done
 - **Work:**
   1. Real-time polling via `GET /api/jobs/:id` (2s interval, stop on terminal state)
-  2. Progress states shown: uploading → pending → processing → succeeded/failed
-  3. On `SUCCEEDED`: render output video via presigned GET URL from the API
-- **AC:** Full flow visible in UI; video plays inline on success without a separate download step
-- **Rollback:** Remove polling loop; show static status badge only
+  2. Progress states shown: requesting → uploading → creating-job → polling → succeeded/failed
+  3. On `SUCCEEDED`: render output video via presigned GET URL + download button
+  4. Enriched `GET /api/jobs/:id` response with `downloadUrl` (presigned GET) when SUCCEEDED
+  5. Added `getDownloadUrl(bucket, key, expiresIn)` to `S3Service`
+  6. "Start Over" and "Try Again" reset buttons for succeeded/failed states
+  7. Resolution selector: dropdown (240p/360p/480p/720p/1080p) threaded through full pipeline
+     - `CreateJobDto`: `@IsIn(['240p','360p','480p','720p','1080p'])` validation
+     - `JobsService`: passes resolution into SQS profiles array (default: 720p)
+     - `FfmpegService`: profile-to-scale-height lookup map (was hardcoded 720p)
+     - Output key uses actual resolution: `outputs/{jobId}/{resolution}.mp4`
+- **AC:** Full flow visible in UI; video plays inline on success; resolution selection works end-to-end
+- **Proof:** `tsc --noEmit` clean (api, web, worker); `npm run build` clean (43 modules); 80 tests pass (10 suites)
+- **Commit:** `90567fe` — `feat(api,web,worker): issue-9 job polling + video player + resolution selector` (10 files, +542 −96)
+- **Rollback:** Remove polling loop; revert to static status badge; revert resolution to hardcoded 720p
 
 ### ISSUE-10: Interactive Pipeline Diagram — ⬜ Planned
 - **Goal:** The highest-impression element for any engineer visiting the site. Shows the real distributed system at a glance.

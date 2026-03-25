@@ -275,3 +275,34 @@
 - **Decision:** Removed the pill entirely. Added a dedicated "Why This Exists" section between Hero and Demo that explains the architectural intent in 3–4 sentences: presigned uploads keep files off the API, SQS decouples dispatch from processing, Worker runs in its own Fargate task.
 - **Rationale:** Framing affects perception. A recruiter or engineer who reads "Portfolio Project" adjusts their expectations downward. One who reads "Every architectural decision has a reason" engages differently.
 - **Consequence:** The page leads with technical intent rather than a label.
+
+---
+
+### D-028: Enrich GET /api/jobs/:id Response (Not a Separate Download Endpoint)
+- **Status:** Decided (implemented)
+- **Context:** The frontend needs a presigned GET URL for the output video when a job succeeds. Two options: (A) new `GET /api/jobs/:id/output` endpoint, or (B) append `downloadUrl` to the existing `GET /api/jobs/:id` response.
+- **Decision:** Option B — enrich the existing response. When `status === SUCCEEDED` and `outputKeys` is non-empty, `JobsService.findById` generates a presigned GET URL via `S3Service.getDownloadUrl` and includes it as `downloadUrl`. For non-SUCCEEDED jobs, `downloadUrl` is `null`.
+- **Rationale:** The frontend is already polling `GET /api/jobs/:id`. Having the presigned URL arrive in the same response as the `SUCCEEDED` status avoids an extra request and eliminates a "succeeded but loading URL…" flash state. One response, one state transition.
+- **Consequence:** `S3Service` was injected into `JobsService` (already available — `S3Module` is `@Global()`). No new endpoint.
+
+### D-029: Polling with useRef Cleanup Pattern
+- **Status:** Decided (implemented)
+- **Context:** The DemoWidget needs to poll `GET /api/jobs/:id` every 2 seconds until a terminal state. `setInterval` must be cleaned up on unmount or when polling stops.
+- **Decision:** Store the interval ID in a `useRef<number | null>`, start polling via `setInterval` in a `startPolling` callback, stop via `clearInterval` in a `stopPolling` callback. A `useEffect` cleanup runs `stopPolling` on unmount.
+- **Alternatives rejected:**
+  - `setTimeout` chains — harder to cancel, requires tracking recursion
+  - `useEffect` with `status` dependency — creates new intervals on every status change, causing leaks
+- **Consequence:** Clean unmount behavior. No duplicate polls. Interval is cleared exactly once.
+
+### D-030: Resolution Pipeline Without DB Schema Change
+- **Status:** Decided (implemented)
+- **Context:** The resolution selector lets users choose 240p–1080p output. The question was whether to store the selected resolution in the jobs table.
+- **Decision:** No DB schema change. Resolution flows through the request only:
+  1. Frontend sends `resolution` in `POST /api/jobs` body
+  2. API validates via `@IsIn(['240p','360p','480p','720p','1080p'])` (default: 720p)
+  3. Resolution is placed in the SQS message payload as a profile string
+  4. Worker reads it from the message, maps to ffmpeg scale filter via `PROFILE_SCALE_HEIGHT` lookup
+  5. Output key uses the resolution: `outputs/{jobId}/{resolution}.mp4`
+  6. The resulting output key is stored in `outputKeys` (jsonb), which already captures what was produced
+- **Rationale:** Adding a column for a transient UI preference that's already captured in the output key would be redundant. The `outputKeys` array tells you what resolution was produced.
+- **Consequence:** If you need to query "all jobs transcoded at 1080p", you'd need to parse `outputKeys`. Acceptable at portfolio scale.

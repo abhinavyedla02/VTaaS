@@ -77,7 +77,7 @@ VTaaS (Video Transcode as a Service) is a queue-driven media pipeline. The syste
 |-----------|------|---------|
 | `Hero` | `Hero.tsx` | Title, subtitle, one-liner with gradient text and ambient glow |
 | `WhyThisExists` | `WhyThisExists.tsx` | Motivation section — frames the project as intentional engineering |
-| `DemoWidget` | `DemoWidget.tsx` | Upload flow: submitter name → file selection (drag-and-drop) → job creation |
+| `DemoWidget` | `DemoWidget.tsx` | Full lifecycle: name → resolution selector → file upload → polling → video player / error |
 | `SystemDiagram` | `SystemDiagram.tsx` | Data-driven SVG pipeline diagram (two-row layout: processing + storage) |
 | `AboutStack` | `AboutStack.tsx` | 7-item tech stack grid |
 | `WhatsNext` | `WhatsNext.tsx` | Future-work section (AI, Auth, Observability) |
@@ -97,7 +97,10 @@ VTaaS (Video Transcode as a Service) is a queue-driven media pipeline. The syste
 - Call API endpoints to request presigned upload + create jobs
 - Upload file directly to S3 using presigned URL
 - Client-side file validation (type allowlist + 20MB size cap) before upload
-- Poll API for job status and display outputs (Issue 9)
+- Poll `GET /api/jobs/:id` every 2s for status updates; stop on terminal state (SUCCEEDED/FAILED)
+- On SUCCEEDED: render HTML5 `<video>` player with presigned GET URL; show Download button
+- On FAILED: display error message with "Try Again" reset button
+- Resolution selector: user picks output resolution (240p–1080p), threaded into `POST /api/jobs` body
 
 ---
 
@@ -165,23 +168,26 @@ VTaaS (Video Transcode as a Service) is a queue-driven media pipeline. The syste
 - `POST /api/uploads`
   - Input: `{ mimeType, sizeBytes }`
   - Output: `{ url, inputKey, expiresIn }` (presigned PUT)
-
-### Planned endpoints (Phase 0)
 - `POST /api/jobs`
-  - Input: `{ inputKey }`
-  - Output: `{ id, status }`
+  - Input: `{ inputKey, submitterName?, note?, resolution? }`
+  - Output: `{ id, status, submitterName, note }`
   - Behavior: idempotent by `(user_id, input_key)`
+  - `resolution` validated via `@IsIn(['240p','360p','480p','720p','1080p'])`, defaults to `720p`
 - `GET /api/jobs/:id`
-  - Output: `{ id, status, inputKey, outputKeys, error, updatedAt }`
+  - Output: `{ id, status, inputKey, outputKeys, error, updatedAt, downloadUrl }`
+  - `downloadUrl` is a presigned GET URL (15min TTL) — populated only when status is `SUCCEEDED` and `outputKeys` is non-empty
 
 ---
 
 ## Queue message contract (SQS)
 
-### v0 message schema (Phase 0, locked)
+### v0 message schema (Phase 0, updated for resolution)
 ```json
 {
   "jobId": "<uuid>",
   "inputKey": "inputs/<uuid>.<ext>",
   "profiles": ["720p"]
 }
+```
+
+`profiles` now carries the user-selected resolution (e.g. `["480p"]`). The worker's `FfmpegService` maps profile strings to ffmpeg scale filters via a `PROFILE_SCALE_HEIGHT` lookup. Output key uses the profile: `outputs/{jobId}/{profile}.mp4`.

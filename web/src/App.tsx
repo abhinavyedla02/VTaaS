@@ -1,46 +1,42 @@
-import { useState, useEffect } from 'react';
-import UploadForm from './components/UploadForm';
+import Hero from './components/Hero';
+import WhyThisExists from './components/WhyThisExists';
+import DemoWidget from './components/DemoWidget';
+import SystemDiagram from './components/SystemDiagram';
+import AboutStack from './components/AboutStack';
+import WhatsNext from './components/WhatsNext';
 
-function App() {
-  const [loading, setLoading] = useState(true);
-  const [healthData, setHealthData] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetch('/api/health')
-      .then(response => {
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-        return response.json();
-      })
-      .then(data => {
-        setHealthData(JSON.stringify(data, null, 2));
-        setError(null);
-      })
-      .catch(err => {
-        setError(err.message);
-        setHealthData(null);
-      })
-      .finally(() => {
-        setLoading(false);
-      });
-  }, []);
-
+export default function App() {
   return (
-    <div style={{ maxWidth: '800px', margin: '0 auto', padding: '2rem' }}>
-      <h1>VTaaS</h1>
+    <div className="app">
+      <main className="app-main">
+        <Hero />
+        <WhyThisExists />
+        <DemoWidget />
+        <SystemDiagram />
+        <AboutStack />
+        <WhatsNext />
+      </main>
 
-      <div style={{ marginBottom: '2rem', padding: '1rem', backgroundColor: '#f5f5f5', borderRadius: '4px' }}>
-        <h3>API Health</h3>
-        {loading && <p>Loading...</p>}
-        {error && <p style={{ color: 'red' }}>Error: {error}</p>}
-        {healthData && <pre style={{ margin: 0 }}>{healthData}</pre>}
-      </div>
-
-      <UploadForm />
+      <footer className="app-footer">
+        <p>
+          Built by{' '}
+          <a
+            href="https://github.com/abhinavyedla/VTaaS"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Abhinav Yedla
+          </a>{' '}
+          · Source on{' '}
+          <a
+            href="https://github.com/abhinavyedla/VTaaS"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            GitHub
+          </a>
+        </p>
+      </footer>
     </div>
   );
 }
-
-export default App;

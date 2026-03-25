@@ -1,0 +1,73 @@
+.diagram {
+  padding: var(--space-4xl) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.diagram-container {
+  background: var(--color-bg-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-2xl);
+  overflow-x: auto;
+}
+
+.diagram-svg {
+  display: block;
+  margin: 0 auto;
+  width: 100%;
+  height: auto;
+}
+
+/* Node styles */
+.diagram-node-rect {
+  fill: var(--color-bg-surface);
+  stroke: var(--color-border);
+  stroke-width: 1.5;
+  rx: 8;
+  ry: 8;
+  transition: all var(--transition-fast);
+}
+
+.diagram-node-rect.highlight {
+  stroke: var(--color-accent);
+  stroke-width: 2;
+}
+
+.diagram-node-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  fill: var(--color-text-primary);
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+
+.diagram-node-sublabel {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  fill: var(--color-text-muted);
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+
+.diagram-arrow {
+  stroke: var(--color-border);
+  stroke-width: 1.5;
+  fill: none;
+  marker-end: url(#arrowhead);
+}
+
+.diagram-arrow-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  fill: var(--color-text-secondary);
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+
+@media (max-width: 768px) {
+  .diagram-container {
+    padding: var(--space-lg) var(--space-md);
+  }
+}

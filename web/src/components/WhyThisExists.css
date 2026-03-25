@@ -1,0 +1,16 @@
+.why {
+  padding: var(--space-4xl) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.why-body {
+  max-width: 620px;
+  font-size: var(--text-base);
+  color: var(--color-text-secondary);
+  line-height: 1.8;
+}
+
+.why-body strong {
+  color: var(--color-text-primary);
+  font-weight: 600;
+}

@@ -20,4 +20,7 @@ notes/
 *.log
 
 
+# sample video (large binary — seed via S3, don't commit)
+infra/sample.mp4
+
 .cursor/

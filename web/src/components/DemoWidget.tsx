@@ -48,6 +48,8 @@ function isStepCompleted(step: number, status: DemoStatus): boolean {
 const ACCEPTED_TYPES = new Set(['video/mp4', 'video/quicktime', 'video/webm']);
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
 const POLL_INTERVAL_MS = 2000;
+const SAMPLE_VIDEO_URL =
+  import.meta.env.VITE_SAMPLE_VIDEO_URL || '/sample-video';
 
 function validateFile(f: File): string | null {
   if (!ACCEPTED_TYPES.has(f.type)) {
@@ -64,21 +66,25 @@ interface DemoWidgetProps {
   setStatus: React.Dispatch<React.SetStateAction<DemoStatus>>;
   jobResponse: JobResponse | null;
   setJobResponse: React.Dispatch<React.SetStateAction<JobResponse | null>>;
+  setDiagramStage: React.Dispatch<React.SetStateAction<number>>;
+  diagramStage: number;
 }
 
-export default function DemoWidget({ status, setStatus, jobResponse, setJobResponse }: DemoWidgetProps) {
+export default function DemoWidget({ status, setStatus, jobResponse, setJobResponse, setDiagramStage, diagramStage }: DemoWidgetProps) {
   const [submitterName, setSubmitterName] = useState('');
   const [resolution, setResolution] = useState('720p');
   const [file, setFile] = useState<File | null>(null);
   const [message, setMessage] = useState('');
   const [dragging, setDragging] = useState(false);
+  const [fetchingSample, setFetchingSample] = useState(false);
   const pollRef = useRef<number | null>(null);
 
   const isBusy = status === 'requesting' || status === 'uploading' || status === 'creating-job';
   const isPolling = status === 'polling';
   const isTerminal = status === 'succeeded' || status === 'failed';
+  const diagramComplete = diagramStage >= 6;
 
-  // Cleanup polling on unmount or terminal state
+  // Cleanup polling on unmount
   useEffect(() => {
     return () => {
       if (pollRef.current !== null) {
@@ -132,7 +138,7 @@ export default function DemoWidget({ status, setStatus, jobResponse, setJobRespo
     }, POLL_INTERVAL_MS);
 
     pollRef.current = intervalId;
-  }, [stopPolling]);
+  }, [stopPolling, setStatus, setJobResponse]);
 
   const resetAll = useCallback(() => {
     stopPolling();
@@ -142,7 +148,9 @@ export default function DemoWidget({ status, setStatus, jobResponse, setJobRespo
     setStatus('idle');
     setMessage('');
     setJobResponse(null);
-  }, [stopPolling, setStatus, setJobResponse]);
+    setDiagramStage(0);
+    setFetchingSample(false);
+  }, [stopPolling, setStatus, setJobResponse, setDiagramStage]);
 
   const selectFile = useCallback((f: File) => {
     const error = validateFile(f);
@@ -155,7 +163,7 @@ export default function DemoWidget({ status, setStatus, jobResponse, setJobRespo
     setStatus('idle');
     setMessage('');
     setJobResponse(null);
-  }, []);
+  }, [setStatus, setJobResponse]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -186,78 +194,125 @@ export default function DemoWidget({ status, setStatus, jobResponse, setJobRespo
     }
   };
 
+  /** Shared upload pipeline — takes a File and runs presign → upload → create job → poll */
+  const runUploadPipeline = async (uploadFile: File, name: string, res: string) => {
+    // Auto-set diagram to stage 1 when pipeline starts
+    setDiagramStage(1);
+
+    // Step 1: Get presigned URL
+    setStatus('requesting');
+    setMessage('Requesting presigned upload URL…');
+
+    const uploadRes = await fetch('/api/uploads', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mimeType: uploadFile.type, sizeBytes: uploadFile.size }),
+    });
+
+    if (!uploadRes.ok) {
+      const errorData: { message?: string } = await uploadRes.json();
+      throw new Error(errorData.message ?? `Upload request failed (${uploadRes.status})`);
+    }
+
+    const { url, inputKey }: { url: string; inputKey: string } = await uploadRes.json();
+
+    // Step 2: Upload to S3 via presigned URL
+    setStatus('uploading');
+    setMessage('Uploading to S3…');
+
+    const uploadUrl = fixLocalUrl(url);
+
+    const putRes = await fetch(uploadUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': uploadFile.type },
+      body: uploadFile,
+    });
+
+    if (!putRes.ok) {
+      throw new Error(`S3 upload failed (${putRes.status})`);
+    }
+
+    // Step 3: Create job
+    setStatus('creating-job');
+    setMessage('Creating transcode job…');
+
+    const jobRes = await fetch('/api/jobs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ inputKey, submitterName: name, resolution: res }),
+    });
+
+    if (!jobRes.ok) {
+      const errorData: { message?: string } = await jobRes.json();
+      throw new Error(errorData.message ?? `Job creation failed (${jobRes.status})`);
+    }
+
+    const job: { id: string; status: string } = await jobRes.json();
+
+    setJobResponse({
+      id: job.id,
+      status: job.status as JobResponse['status'],
+      inputKey,
+      outputKeys: null,
+      downloadUrl: null,
+      error: null,
+      updatedAt: new Date().toISOString(),
+    });
+
+    // Start polling for status updates
+    startPolling(job.id);
+  };
+
   const handleUpload = async () => {
     if (!file || !submitterName.trim()) return;
 
     try {
-      // Step 1: Get presigned URL
-      setStatus('requesting');
-      setMessage('Requesting presigned upload URL…');
-
-      const uploadRes = await fetch('/api/uploads', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mimeType: file.type, sizeBytes: file.size }),
-      });
-
-      if (!uploadRes.ok) {
-        const errorData: { message?: string } = await uploadRes.json();
-        throw new Error(errorData.message ?? `Upload request failed (${uploadRes.status})`);
-      }
-
-      const { url, inputKey }: { url: string; inputKey: string } = await uploadRes.json();
-
-      // Step 2: Upload to S3 via presigned URL
-      setStatus('uploading');
-      setMessage('Uploading to S3…');
-
-      const uploadUrl = fixLocalUrl(url);
-
-      const putRes = await fetch(uploadUrl, {
-        method: 'PUT',
-        headers: { 'Content-Type': file.type },
-        body: file,
-      });
-
-      if (!putRes.ok) {
-        throw new Error(`S3 upload failed (${putRes.status})`);
-      }
-
-      // Step 3: Create job
-      setStatus('creating-job');
-      setMessage('Creating transcode job…');
-
-      const jobRes = await fetch('/api/jobs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ inputKey, submitterName: submitterName.trim(), resolution }),
-      });
-
-      if (!jobRes.ok) {
-        const errorData: { message?: string } = await jobRes.json();
-        throw new Error(errorData.message ?? `Job creation failed (${jobRes.status})`);
-      }
-
-      const job: { id: string; status: string } = await jobRes.json();
-
-      setJobResponse({
-        id: job.id,
-        status: job.status as JobResponse['status'],
-        inputKey,
-        outputKeys: null,
-        downloadUrl: null,
-        error: null,
-        updatedAt: new Date().toISOString(),
-      });
-
-      // Start polling for status updates
-      startPolling(job.id);
+      await runUploadPipeline(file, submitterName.trim(), resolution);
     } catch (err: unknown) {
       setStatus('error');
       if (err instanceof Error) {
         setMessage(err.message);
       } else {
         setMessage('An unexpected error occurred.');
+      }
+    }
+  };
+
+  const handleSampleUpload = async () => {
+    try {
+      setFetchingSample(true);
+
+      // Pre-fill name if empty
+      const name = submitterName.trim() || 'Demo User';
+      if (!submitterName.trim()) {
+        setSubmitterName('Demo User');
+      }
+
+      // Set resolution to 360p for fastest transcode
+      const res = '360p';
+      setResolution(res);
+
+      // Fetch sample video from S3
+      setMessage('Fetching sample video…');
+      const fetchRes = await fetch(SAMPLE_VIDEO_URL);
+      if (!fetchRes.ok) {
+        throw new Error(`Failed to fetch sample video (${fetchRes.status})`);
+      }
+      const blob = await fetchRes.blob();
+      const sampleFile = new File([blob], 'sample.mp4', { type: 'video/mp4' });
+
+      setFile(sampleFile);
+      setFetchingSample(false);
+
+      // Run through the normal upload pipeline
+      await runUploadPipeline(sampleFile, name, res);
+    } catch (err: unknown) {
+      setFetchingSample(false);
+      setStatus('error');
+      if (err instanceof Error) {
+        setMessage(`Sample video unavailable — try uploading your own. (${err.message})`);
+      } else {
+        setMessage('Sample video unavailable — try uploading your own.');
       }
     }
   };
@@ -322,7 +377,7 @@ export default function DemoWidget({ status, setStatus, jobResponse, setJobRespo
                 placeholder="e.g. Jane Doe"
                 value={submitterName}
                 onChange={(e) => setSubmitterName(e.target.value)}
-                disabled={isBusy}
+                disabled={isBusy || fetchingSample}
                 maxLength={100}
               />
             </div>
@@ -337,7 +392,7 @@ export default function DemoWidget({ status, setStatus, jobResponse, setJobRespo
                 className="demo-select"
                 value={resolution}
                 onChange={(e) => setResolution(e.target.value)}
-                disabled={isBusy}
+                disabled={isBusy || fetchingSample}
               >
                 <option value="240p">240p</option>
                 <option value="360p">360p</option>
@@ -351,7 +406,7 @@ export default function DemoWidget({ status, setStatus, jobResponse, setJobRespo
             <div
               className={[
                 'demo-file-zone',
-                isBusy ? 'disabled' : '',
+                isBusy || fetchingSample ? 'disabled' : '',
                 file ? 'has-file' : '',
                 dragging ? 'dragging' : '',
               ].filter(Boolean).join(' ')}
@@ -364,7 +419,7 @@ export default function DemoWidget({ status, setStatus, jobResponse, setJobRespo
                 type="file"
                 accept="video/mp4,video/quicktime,video/webm"
                 onChange={handleFileChange}
-                disabled={isBusy}
+                disabled={isBusy || fetchingSample}
               />
               {file ? (
                 <>
@@ -388,21 +443,39 @@ export default function DemoWidget({ status, setStatus, jobResponse, setJobRespo
             <button
               className="demo-upload-btn"
               onClick={handleUpload}
-              disabled={!file || !submitterName.trim() || isBusy}
+              disabled={!file || !submitterName.trim() || isBusy || fetchingSample}
             >
               {isBusy ? 'Processing…' : 'Upload & Transcode'}
             </button>
+
+            {/* Sample video button */}
+            {status === 'idle' && !file && (
+              <div className="demo-sample-divider">
+                <span>or</span>
+              </div>
+            )}
+            {status === 'idle' && !file && (
+              <button
+                className="demo-sample-btn"
+                onClick={handleSampleUpload}
+                disabled={fetchingSample}
+              >
+                {fetchingSample ? 'Loading sample…' : '▶ Try with Sample Video'}
+              </button>
+            )}
           </>
         )}
 
         {/* Polling / result view */}
-        {isPolling && (
+        {(isPolling || (isTerminal && !diagramComplete)) && (
           <div className="demo-result">
             <div className="demo-status info">
               <div className="demo-spinner" />
               <div className="demo-status-text">
-                {message}
-                {jobResponse && (
+                {isTerminal
+                  ? 'Pipeline complete — click Next on the diagram to see each stage'
+                  : message}
+                {jobResponse && !isTerminal && (
                   <>
                     <br />
                     Job ID: <code>{jobResponse.id}</code> · Status: <code>{jobResponse.status}</code>
@@ -414,7 +487,7 @@ export default function DemoWidget({ status, setStatus, jobResponse, setJobRespo
         )}
 
         {/* Succeeded — video player */}
-        {status === 'succeeded' && jobResponse?.downloadUrl && (
+        {status === 'succeeded' && diagramComplete && jobResponse?.downloadUrl && (
           <div className="demo-result">
             <div className="demo-status success">
               <span className="demo-status-icon">✓</span>
@@ -447,7 +520,7 @@ export default function DemoWidget({ status, setStatus, jobResponse, setJobRespo
         )}
 
         {/* Succeeded but no download URL (edge case) */}
-        {status === 'succeeded' && (!jobResponse || !jobResponse.downloadUrl) && (
+        {status === 'succeeded' && diagramComplete && (!jobResponse || !jobResponse.downloadUrl) && (
           <div className="demo-result">
             <div className="demo-status success">
               <span className="demo-status-icon">✓</span>
@@ -464,7 +537,7 @@ export default function DemoWidget({ status, setStatus, jobResponse, setJobRespo
         )}
 
         {/* Failed */}
-        {status === 'failed' && (
+        {status === 'failed' && diagramComplete && (
           <div className="demo-result">
             <div className="demo-status error">
               <span className="demo-status-icon">✕</span>

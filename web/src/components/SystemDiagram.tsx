@@ -1,5 +1,4 @@
 import './SystemDiagram.css';
-import type { DemoStatus } from './DemoWidget';
 
 /*
  * Two-row pipeline layout:
@@ -60,31 +59,38 @@ const EDGES: PipelineEdge[] = [
   { from: 's3-out',  to: 'browser', label: 'presigned GET', labelDy: 14 },
 ];
 
-function getActiveNodes(status: DemoStatus, jobStatus?: string): Set<string> {
-  switch (status) {
-    case 'idle':
-      return new Set();
-    case 'requesting':
-    case 'creating-job':
-      return new Set(['browser', 'api']);
-    case 'uploading':
-      return new Set(['browser', 'api', 's3-in']);
-    case 'polling':
-      if (jobStatus === 'PROCESSING') {
-        return new Set(['sqs', 'worker']);
-      }
-      // PENDING (or initial poll before first response)
-      return new Set(['browser', 'api', 's3-in', 'sqs']);
-    case 'succeeded':
-      return new Set(['worker', 's3-out', 'browser']);
-    case 'failed':
-      return new Set(['worker']);
-    case 'error':
-      return new Set();
-    default:
-      return new Set();
+/**
+ * Map diagram stage (0-6) to the set of active node IDs.
+ *
+ * 0: idle — no highlights
+ * 1: Browser + API (requesting/uploading)
+ * 2: Browser + API + S3 inputs (uploaded to S3)
+ * 3: All above + SQS Queue (job queued)
+ * 4: SQS + Worker (transcoding)
+ * 5: Worker + S3 outputs (output written)
+ * 6: Worker + S3 outputs + Browser (complete — download ready)
+ */
+function getActiveNodesForStage(stage: number): Set<string> {
+  switch (stage) {
+    case 0: return new Set();
+    case 1: return new Set(['browser', 'api']);
+    case 2: return new Set(['browser', 'api', 's3-in']);
+    case 3: return new Set(['browser', 'api', 's3-in', 'sqs']);
+    case 4: return new Set(['sqs', 'worker']);
+    case 5: return new Set(['worker', 's3-out']);
+    case 6: return new Set(['worker', 's3-out', 'browser']);
+    default: return new Set();
   }
 }
+
+const STAGE_LABELS: Record<number, string> = {
+  1: 'Browser sends request to API',
+  2: 'File uploaded to S3 via presigned URL',
+  3: 'Job queued in SQS',
+  4: 'Worker transcoding video',
+  5: 'Output written to S3',
+  6: 'Download ready in browser',
+};
 
 function getNodeCenter(node: PipelineNode): { cx: number; cy: number } {
   return { cx: node.x + node.width / 2, cy: node.y + node.height / 2 };
@@ -119,14 +125,34 @@ function getEdgePoint(
 }
 
 interface SystemDiagramProps {
-  status: DemoStatus;
-  jobStatus?: string;
+  diagramStage: number;
+  setDiagramStage: React.Dispatch<React.SetStateAction<number>>;
+  maxReachableStage: number;
+  isFailed: boolean;
+  isActive: boolean;
 }
 
-export default function SystemDiagram({ status, jobStatus }: SystemDiagramProps) {
+export default function SystemDiagram({
+  diagramStage,
+  setDiagramStage,
+  maxReachableStage,
+  isFailed,
+  isActive,
+}: SystemDiagramProps) {
   const nodeMap = new Map(NODES.map((n) => [n.id, n]));
-  const activeNodes = getActiveNodes(status, jobStatus);
-  const isFailed = status === 'failed';
+  const activeNodes = isFailed
+    ? new Set(['worker'])
+    : getActiveNodesForStage(diagramStage);
+
+  const canAdvance = !isFailed && diagramStage < maxReachableStage;
+  const showButton = isActive && diagramStage < 6 && !isFailed;
+  const stageLabel = STAGE_LABELS[diagramStage] ?? '';
+
+  const handleNext = () => {
+    if (canAdvance) {
+      setDiagramStage((prev) => prev + 1);
+    }
+  };
 
   return (
     <section className="diagram section" id="diagram">
@@ -183,7 +209,7 @@ export default function SystemDiagram({ status, jobStatus }: SystemDiagramProps)
             const labelWidth = edge.label.length * 6 + 12;
             const labelHeight = 16;
 
-            const edgeActive = activeNodes.has(edge.from) && activeNodes.has(edge.to) && !isFailed;
+            const edgeActive = !isFailed && activeNodes.has(edge.from) && activeNodes.has(edge.to);
             const lineLength = Math.hypot(end.x - start.x, end.y - start.y);
 
             return (
@@ -217,13 +243,13 @@ export default function SystemDiagram({ status, jobStatus }: SystemDiagramProps)
           {/* Nodes */}
           {NODES.map((node) => {
             const { cx, cy } = getNodeCenter(node);
-            const isActive = activeNodes.has(node.id);
+            const isNodeActive = activeNodes.has(node.id);
             const isError = isFailed && node.id === 'worker';
 
             let rectClass = 'diagram-node-rect';
             if (isError) {
               rectClass += ' highlight-error';
-            } else if (isActive) {
+            } else if (isNodeActive) {
               rectClass += ' highlight';
             }
 
@@ -248,6 +274,24 @@ export default function SystemDiagram({ status, jobStatus }: SystemDiagramProps)
             );
           })}
         </svg>
+
+        {/* Stage navigation */}
+        {isActive && (
+          <div className="diagram-controls">
+            {stageLabel && (
+              <span className="diagram-stage-label">{stageLabel}</span>
+            )}
+            {showButton && (
+              <button
+                className="diagram-next-btn"
+                onClick={handleNext}
+                disabled={!canAdvance}
+              >
+                Next →
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </section>
   );

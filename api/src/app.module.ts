@@ -19,7 +19,7 @@ import { CleanupModule } from './cleanup/cleanup.module';
     SqsModule, 
     UploadsModule, 
     JobsModule,
-    ThrottlerModule.forRoot([{ limit: 3, ttl: 3600000 }]),
+    ThrottlerModule.forRoot([{ limit: 100, ttl: 60000 }]),
     ScheduleModule.forRoot(),
     CleanupModule,
   ],

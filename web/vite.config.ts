@@ -10,6 +10,11 @@ export default defineConfig({
       '/api': {
         target: 'http://api:3000',
         changeOrigin: true
+      },
+      '/sample-video': {
+        target: 'http://localstack:4566/vtaas-samples/sample.mp4',
+        changeOrigin: true,
+        rewrite: () => ''
       }
     }
   }

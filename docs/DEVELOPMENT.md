@@ -36,6 +36,17 @@ If you run `docker compose down -v`, you'll need to run it again.
 
 > The unit tests (run via `npm test --workspaces --if-present`) do **not** need a real DB — they mock everything. The migration step is only required before running `./scripts/test-jobs-flow.sh` (the integration test).
 
+### Sample video setup
+
+The "Try with Sample Video" button requires a video file at `infra/sample.mp4`. This file is **gitignored** (large binary). To set it up:
+
+```bash
+# Use any short MP4 video, or generate a test one:
+ffmpeg -f lavfi -i testsrc=duration=5:size=320x240:rate=24 -c:v libx264 infra/sample.mp4
+```
+
+On `docker compose up`, the LocalStack init script (`infra/localstack-init/seed-sample.sh`) automatically creates the `vtaas-samples` bucket and uploads this file.
+
 ---
 
 ## Quickstart (current state)
@@ -141,6 +152,7 @@ npm run build       # full production build (tsc + vite build)
 | `SQS_DLQ_NAME` | Dead-letter queue | `transcode-jobs-dlq` |
 | `SQS_MAX_RECEIVE_COUNT` | Retries before DLQ | `3` |
 | `ENQUEUE_ENABLED` | Gate SQS dispatch (set `false` to disable) | `true` (implicit) |
+| `VITE_SAMPLE_VIDEO_URL` | URL for the sample demo video (frontend) | `/sample-video` (Vite proxy) |
 
 ---
 

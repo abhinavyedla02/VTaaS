@@ -91,7 +91,19 @@ VTaaS (Video Transcode as a Service) is a queue-driven media pipeline. The syste
 **System diagram:**
 - Static SVG rendered from data arrays (`NODES`, `EDGES`)
 - Two-row layout: processing pipeline (Browser → API → SQS → Worker) on top, storage (S3 inputs, S3 outputs) on bottom
-- Issue 10 will make this interactive
+- Issue 10: interactive — nodes and edges highlight dynamically based on `DemoStatus` and `jobStatus` props
+
+**Manual diagram progression (Issue 10.5):**
+- `diagramStage` (0–6) controls which nodes are highlighted, advanced via "Next →" button
+- Button disables when user catches up to real pipeline state (prevents advancing past reality)
+- Succeeded auto-sets to stage 6; failed shows worker node with error styling
+- More engaging than auto-buffering — each click teaches what happens at that pipeline stage
+
+**Sample video demo (Issue 10.5):**
+- "Try with Sample Video" button fetches from `/sample-video` (Vite proxy → LocalStack)
+- `VITE_SAMPLE_VIDEO_URL` env var overrides the proxy path for production (e.g., CloudFront URL)
+- Fetched as a Blob, converted to a File, then uploaded through the normal presigned URL flow
+- Pre-fills submitter name to "Demo User" and resolution to 360p
 
 **Responsibilities:**
 - Call API endpoints to request presigned upload + create jobs
@@ -115,6 +127,7 @@ VTaaS (Video Transcode as a Service) is a queue-driven media pipeline. The syste
 **Buckets (Phase 0 plan):**
 - `vtaas-inputs`
 - `vtaas-outputs` (created by Worker in Issue 5)
+- `vtaas-samples` (created by LocalStack init script; holds sample demo video)
 
 **Key scheme (Phase 0 plan, locked):**
 - Inputs: `inputs/{uuid}.{ext}`
@@ -191,3 +204,11 @@ VTaaS (Video Transcode as a Service) is a queue-driven media pipeline. The syste
 ```
 
 `profiles` now carries the user-selected resolution (e.g. `["480p"]`). The worker's `FfmpegService` maps profile strings to ffmpeg scale filters via a `PROFILE_SCALE_HEIGHT` lookup. Output key uses the profile: `outputs/{jobId}/{profile}.mp4`.
+
+---
+
+## Production Deployment Notes
+
+- **Sample video:** Should be served from CloudFront or a public S3 bucket. `VITE_SAMPLE_VIDEO_URL` must be set to the production URL at build time.
+- **`infra/sample.mp4`:** In `.gitignore` (large binary). For production, upload directly to S3. Consider Git LFS if the file needs to be tracked.
+- **`VITE_SAMPLE_VIDEO_URL`:** Baked into the frontend at build time by Vite. Must point to a publicly accessible URL in production.

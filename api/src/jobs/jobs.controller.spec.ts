@@ -31,7 +31,7 @@ describe('JobsController', () => {
         };
 
         const module: TestingModule = await Test.createTestingModule({
-            imports: [ThrottlerModule.forRoot([{ limit: 3, ttl: 3600000 }])],
+            imports: [ThrottlerModule.forRoot([{ limit: 100, ttl: 60000 }])],
             controllers: [JobsController],
             providers: [
                 { provide: JobsService, useValue: mockJobsService },

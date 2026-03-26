@@ -208,15 +208,34 @@ A visitor lands on the portfolio page, sees a sleek upload form, drops a short v
 - **Commit:** `90567fe` — `feat(api,web,worker): issue-9 job polling + video player + resolution selector` (10 files, +542 −96)
 - **Rollback:** Remove polling loop; revert to static status badge; revert resolution to hardcoded 720p
 
-### ISSUE-10: Interactive Pipeline Diagram — ⬜ Planned
+### ISSUE-10: Interactive Pipeline Diagram — ✅ Done
 - **Goal:** The highest-impression element for any engineer visiting the site. Shows the real distributed system at a glance.
 - **Work:**
-  1. Build an interactive Mermaid or SVG-based flowchart: Browser → API → S3 → SQS → Worker → S3 → Browser
-  2. Annotate with real technical labels (queue name, bucket names, ECS task arrows, Neon DB)
-  3. Embed as a dedicated section in the portfolio page (below the demo widget)
-  4. Optional: live stats ticker (total jobs processed, current queue depth) via a new `GET /api/stats` endpoint
-- **AC:** Diagram renders correctly on desktop and mobile; labels match actual deployed resource names
+  1. Lifted `status` and `jobResponse` state from DemoWidget to App.tsx
+  2. SystemDiagram accepts `status`/`jobStatus` props; `getActiveNodes()` maps pipeline stage → active node IDs
+  3. Removed hardcoded `highlight: true`; computed dynamically from props
+  4. CSS: accent glow with pulse animation on active nodes, red glow on failed (worker node)
+  5. Edge animations: marching ants on edges between active nodes
+  6. Fixed stale worker test (`ffmpeg.service.spec.ts`: `1080p` → `8k`)
+- **AC:** Diagram renders correctly on desktop and mobile; nodes highlight in sequence during live demo
+- **Proof:** `tsc --noEmit` clean; `npm run build` clean (43 modules); 133 tests pass (80 api + 33 worker + 20 db)
+- **Commit:** `779f959` — `feat(web,worker): issue-10 interactive pipeline diagram + fix stale test` (5 files, +131 −17)
 - **Rollback:** Replace with a static image
+
+### ISSUE-10.5: Sample Video Demo Button — ✅ Done
+- **Goal:** One-click demo for recruiters — sample video flows through the full pipeline with guided diagram tour.
+- **Work:**
+  1. LocalStack seeding: `infra/localstack-init/seed-sample.sh` creates `vtaas-samples` bucket, uploads sample video
+  2. "Try with Sample Video" button fetches video from S3 via Vite proxy, runs through real presigned upload flow
+  3. Manual diagram progression: user clicks "Next →" to advance through 6 stages; button disabled when caught up to backend
+  4. Result gating: video player only reveals when user reaches final diagram stage (progressive disclosure)
+  5. Vite proxy (`/sample-video` → LocalStack) fixes CORS; `VITE_SAMPLE_VIDEO_URL` env var for production
+  6. Throttle bumped from 3/hr → 100/min for demo-friendly rate limiting
+  7. Error handling: sample fetch failure shows user-friendly message, resets to idle
+- **AC:** Click sample → diagram stage 1 lights up → click Next through stages → video reveals at stage 6
+- **Proof:** `tsc --noEmit` clean; `npm run build` clean (43 modules); 133 tests pass (80 api + 33 worker + 20 db)
+- **Commit:** `88f3f3b` — `feat(web,api,infra): issue-10.5 sample video + manual diagram progression + throttle fix` (18 files, +466 −117)
+- **Rollback:** Remove sample button; revert manual progression to static diagram
 
 ---
 

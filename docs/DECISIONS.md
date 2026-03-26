@@ -306,3 +306,24 @@
   6. The resulting output key is stored in `outputKeys` (jsonb), which already captures what was produced
 - **Rationale:** Adding a column for a transient UI preference that's already captured in the output key would be redundant. The `outputKeys` array tells you what resolution was produced.
 - **Consequence:** If you need to query "all jobs transcoded at 1080p", you'd need to parse `outputKeys`. Acceptable at portfolio scale.
+
+### D-031: Sample Video Fetched on Demand from S3
+- **Status:** Decided (implemented)
+- **Context:** Need a one-click demo for recruiters. Video could be bundled in the React build or hosted externally.
+- **Decision:** Host in a dedicated S3 bucket (`vtaas-samples`), fetch on demand when user clicks the button. `VITE_SAMPLE_VIDEO_URL` env var makes it easy to swap between LocalStack (local) and a real S3/CloudFront URL (production).
+- **Rationale:** Bundling ~5MB in the web build bloats every page load. Fetch-on-demand means zero bundle impact and the video still flows through the real pipeline.
+- **Consequence:** Requires LocalStack seeding for local dev (`infra/localstack-init/seed-sample.sh`); production deploy needs the video uploaded to a public bucket or CDN.
+
+### D-032: Frontend Dwell Time Buffering for Diagram Pacing
+- **Status:** Decided (implemented)
+- **Context:** Small videos transcode in 1–2 seconds, causing diagram highlights to flash by too fast for the viewer.
+- **Decision:** Buffer status transitions on the frontend with a 1.5s minimum dwell per stage. Terminal states (`succeeded`/`failed`/`error`) bypass the buffer and apply immediately.
+- **Rationale:** Purely visual — backend runs at full speed, UI paces the animation. No artificial backend delays, no polling changes.
+- **Consequence:** None for backend. Users see each pipeline stage for at least 1.5s.
+
+### D-033: Manual Diagram Progression Replaces Auto-Buffering
+- **Status:** Decided (implemented, supersedes D-032)
+- **Context:** Dwell-time auto-buffering (D-032) paced highlights automatically, but the timing felt passive and the user had no control. Small videos still flashed through stages.
+- **Decision:** Replace auto-buffering with manual step-by-step progression. A "Next →" button lets the user advance the diagram stage. The button is disabled when the user has caught up to the real pipeline state. Terminal states auto-advance.
+- **Rationale:** More engaging — turns the diagram into a guided architecture tour. Each click teaches the user what happens at that stage. Backend still runs at full speed; the diagram is a separate visual layer.
+- **Consequence:** Requires the user to click through stages. Slightly more interactive effort, but much more educational. Also bumped throttle from 3/hr to 20/hr for better demo experience.

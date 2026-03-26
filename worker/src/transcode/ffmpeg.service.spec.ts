@@ -81,8 +81,8 @@ describe('FfmpegService', () => {
 
     it('throws on unsupported profile', async () => {
         await expect(
-            service.transcode('/tmp/input.mp4', '/tmp/output.mp4', '1080p'),
-        ).rejects.toThrow('Unsupported profile: 1080p');
+            service.transcode('/tmp/input.mp4', '/tmp/output.mp4', '8k'),
+        ).rejects.toThrow('Unsupported profile: 8k');
 
         // Verify execFile was NOT called
         expect(mockExecFile).not.toHaveBeenCalled();

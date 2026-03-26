@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import './DemoWidget.css';
 
-type DemoStatus =
+export type DemoStatus =
   | 'idle'
   | 'requesting'
   | 'uploading'
@@ -11,7 +11,7 @@ type DemoStatus =
   | 'failed'
   | 'error';
 
-interface JobResponse {
+export interface JobResponse {
   id: string;
   status: 'PENDING' | 'PROCESSING' | 'SUCCEEDED' | 'FAILED';
   inputKey: string;
@@ -59,13 +59,18 @@ function validateFile(f: File): string | null {
   return null;
 }
 
-export default function DemoWidget() {
+interface DemoWidgetProps {
+  status: DemoStatus;
+  setStatus: React.Dispatch<React.SetStateAction<DemoStatus>>;
+  jobResponse: JobResponse | null;
+  setJobResponse: React.Dispatch<React.SetStateAction<JobResponse | null>>;
+}
+
+export default function DemoWidget({ status, setStatus, jobResponse, setJobResponse }: DemoWidgetProps) {
   const [submitterName, setSubmitterName] = useState('');
   const [resolution, setResolution] = useState('720p');
   const [file, setFile] = useState<File | null>(null);
-  const [status, setStatus] = useState<DemoStatus>('idle');
   const [message, setMessage] = useState('');
-  const [jobResponse, setJobResponse] = useState<JobResponse | null>(null);
   const [dragging, setDragging] = useState(false);
   const pollRef = useRef<number | null>(null);
 
@@ -137,7 +142,7 @@ export default function DemoWidget() {
     setStatus('idle');
     setMessage('');
     setJobResponse(null);
-  }, [stopPolling]);
+  }, [stopPolling, setStatus, setJobResponse]);
 
   const selectFile = useCallback((f: File) => {
     const error = validateFile(f);

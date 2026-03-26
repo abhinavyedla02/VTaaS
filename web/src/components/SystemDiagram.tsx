@@ -1,4 +1,5 @@
 import './SystemDiagram.css';
+import type { DemoStatus } from './DemoWidget';
 
 /*
  * Two-row pipeline layout:
@@ -18,7 +19,6 @@ interface PipelineNode {
   y: number;
   width: number;
   height: number;
-  highlight?: boolean;
 }
 
 interface PipelineEdge {
@@ -33,10 +33,10 @@ interface PipelineEdge {
 // Row 1: y=30, Row 2: y=170.  ~190px horizontal gap between nodes.
 const NODES: PipelineNode[] = [
   // Row 1 — processing pipeline (left to right)
-  { id: 'browser', label: 'Browser',       sublabel: 'React + Vite',   x: 30,  y: 30,  width: 120, height: 50, highlight: true },
-  { id: 'api',     label: 'NestJS API',    sublabel: 'Fastify',        x: 250, y: 30,  width: 120, height: 50, highlight: true },
+  { id: 'browser', label: 'Browser',       sublabel: 'React + Vite',   x: 30,  y: 30,  width: 120, height: 50 },
+  { id: 'api',     label: 'NestJS API',    sublabel: 'Fastify',        x: 250, y: 30,  width: 120, height: 50 },
   { id: 'sqs',     label: 'SQS Queue',     sublabel: 'transcode-jobs', x: 470, y: 30,  width: 130, height: 50 },
-  { id: 'worker',  label: 'ffmpeg Worker',  sublabel: 'ECS Fargate',    x: 700, y: 30,  width: 130, height: 50, highlight: true },
+  { id: 'worker',  label: 'ffmpeg Worker',  sublabel: 'ECS Fargate',    x: 700, y: 30,  width: 130, height: 50 },
 
   // Row 2 — storage (positioned below Browser and Worker)
   { id: 's3-in',   label: 'S3',            sublabel: 'vtaas-inputs',   x: 130, y: 170, width: 130, height: 50 },
@@ -59,6 +59,32 @@ const EDGES: PipelineEdge[] = [
   // Bottom return: S3 outputs → Browser (presigned GET)
   { from: 's3-out',  to: 'browser', label: 'presigned GET', labelDy: 14 },
 ];
+
+function getActiveNodes(status: DemoStatus, jobStatus?: string): Set<string> {
+  switch (status) {
+    case 'idle':
+      return new Set();
+    case 'requesting':
+    case 'creating-job':
+      return new Set(['browser', 'api']);
+    case 'uploading':
+      return new Set(['browser', 'api', 's3-in']);
+    case 'polling':
+      if (jobStatus === 'PROCESSING') {
+        return new Set(['sqs', 'worker']);
+      }
+      // PENDING (or initial poll before first response)
+      return new Set(['browser', 'api', 's3-in', 'sqs']);
+    case 'succeeded':
+      return new Set(['worker', 's3-out', 'browser']);
+    case 'failed':
+      return new Set(['worker']);
+    case 'error':
+      return new Set();
+    default:
+      return new Set();
+  }
+}
 
 function getNodeCenter(node: PipelineNode): { cx: number; cy: number } {
   return { cx: node.x + node.width / 2, cy: node.y + node.height / 2 };
@@ -92,8 +118,15 @@ function getEdgePoint(
   return { x: cx + ex, y: cy + ey };
 }
 
-export default function SystemDiagram() {
+interface SystemDiagramProps {
+  status: DemoStatus;
+  jobStatus?: string;
+}
+
+export default function SystemDiagram({ status, jobStatus }: SystemDiagramProps) {
   const nodeMap = new Map(NODES.map((n) => [n.id, n]));
+  const activeNodes = getActiveNodes(status, jobStatus);
+  const isFailed = status === 'failed';
 
   return (
     <section className="diagram section" id="diagram">
@@ -120,6 +153,17 @@ export default function SystemDiagram() {
             >
               <polygon points="0 0, 10 3.5, 0 7" fill="#6a6a8a" />
             </marker>
+            <marker
+              id="arrowhead-active"
+              viewBox="0 0 10 7"
+              refX="10"
+              refY="3.5"
+              markerWidth="8"
+              markerHeight="6"
+              orient="auto-start-reverse"
+            >
+              <polygon points="0 0, 10 3.5, 0 7" fill="var(--color-accent)" />
+            </marker>
           </defs>
 
           {/* Edges (rendered first so nodes draw on top) */}
@@ -139,14 +183,19 @@ export default function SystemDiagram() {
             const labelWidth = edge.label.length * 6 + 12;
             const labelHeight = 16;
 
+            const edgeActive = activeNodes.has(edge.from) && activeNodes.has(edge.to) && !isFailed;
+            const lineLength = Math.hypot(end.x - start.x, end.y - start.y);
+
             return (
               <g key={`${edge.from}-${edge.to}`}>
                 <line
-                  className="diagram-arrow"
+                  className={`diagram-arrow${edgeActive ? ' edge-active' : ''}`}
                   x1={start.x}
                   y1={start.y}
                   x2={end.x}
                   y2={end.y}
+                  markerEnd={edgeActive ? 'url(#arrowhead-active)' : 'url(#arrowhead)'}
+                  style={edgeActive ? { '--line-length': lineLength } as React.CSSProperties : undefined}
                 />
                 <rect
                   x={midX - labelWidth / 2}
@@ -168,10 +217,20 @@ export default function SystemDiagram() {
           {/* Nodes */}
           {NODES.map((node) => {
             const { cx, cy } = getNodeCenter(node);
+            const isActive = activeNodes.has(node.id);
+            const isError = isFailed && node.id === 'worker';
+
+            let rectClass = 'diagram-node-rect';
+            if (isError) {
+              rectClass += ' highlight-error';
+            } else if (isActive) {
+              rectClass += ' highlight';
+            }
+
             return (
               <g key={node.id}>
                 <rect
-                  className={`diagram-node-rect${node.highlight ? ' highlight' : ''}`}
+                  className={rectClass}
                   x={node.x}
                   y={node.y}
                   width={node.width}

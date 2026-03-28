@@ -62,7 +62,8 @@ describe('S3Service', () => {
             expect(mockSend).toHaveBeenNthCalledWith(3, expect.any(PutBucketCorsCommand));
         });
 
-        it('should apply correct CORS configuration', async () => {
+        it('should apply wildcard CORS when CORS_ALLOWED_ORIGINS is unset', async () => {
+            delete process.env.CORS_ALLOWED_ORIGINS;
             const notFoundError = new Error('NotFound');
             notFoundError.name = 'NotFound';
             mockSend
@@ -80,6 +81,33 @@ describe('S3Service', () => {
                 ExposeHeaders: ['ETag'],
                 MaxAgeSeconds: 3600,
             });
+        });
+
+        it('should apply env-based CORS when CORS_ALLOWED_ORIGINS is set', async () => {
+            process.env.CORS_ALLOWED_ORIGINS = 'https://vtaas.example.com,https://other.example.com';
+            const notFoundError = new Error('NotFound');
+            notFoundError.name = 'NotFound';
+            mockSend
+                .mockRejectedValueOnce(notFoundError)
+                .mockResolvedValueOnce({})
+                .mockResolvedValueOnce({});
+
+            // Re-create service so it picks up env
+            service = new S3Service();
+            mockSend = service.getClient().send as jest.Mock;
+            mockSend
+                .mockRejectedValueOnce(notFoundError)
+                .mockResolvedValueOnce({})
+                .mockResolvedValueOnce({});
+
+            await service.onModuleInit();
+
+            const corsCall = mockSend.mock.calls[2][0];
+            expect(corsCall.input.CORSConfiguration.CORSRules[0].AllowedOrigins).toEqual([
+                'https://vtaas.example.com',
+                'https://other.example.com',
+            ]);
+            delete process.env.CORS_ALLOWED_ORIGINS;
         });
 
         it('should rethrow unexpected errors', async () => {

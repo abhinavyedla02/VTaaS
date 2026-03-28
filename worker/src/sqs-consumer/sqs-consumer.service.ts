@@ -17,18 +17,17 @@ export class SqsConsumerService implements OnModuleInit, OnModuleDestroy {
     private isPolling = false;
 
     constructor(private readonly transcodeService: TranscodeService) {
-        const endpoint = process.env.AWS_ENDPOINT_URL || 'http://localstack:4566';
+        const endpoint = process.env.AWS_ENDPOINT_URL;
         const region = process.env.AWS_REGION || 'us-east-1';
 
         this.queueName = process.env.SQS_QUEUE_NAME || 'transcode-jobs';
 
         this.client = new SQSClient({
-            endpoint,
+            ...(endpoint ? { endpoint } : {}),
             region,
-            credentials: {
-                accessKeyId: 'test',
-                secretAccessKey: 'test',
-            },
+            ...(endpoint
+                ? { credentials: { accessKeyId: 'test', secretAccessKey: 'test' } }
+                : {}),
         });
     }
 
@@ -72,7 +71,23 @@ export class SqsConsumerService implements OnModuleInit, OnModuleDestroy {
             }
 
             const message = response.Messages[0];
-            const payload = JSON.parse(message.Body!) as TranscodePayload;
+
+            let payload: TranscodePayload;
+            try {
+                payload = JSON.parse(message.Body!) as TranscodePayload;
+            } catch (parseError: unknown) {
+                const msg = parseError instanceof Error ? parseError.message : String(parseError);
+                this.logger.error(
+                    `Poison pill: unparseable message body — deleting immediately: ${msg}`,
+                );
+                await this.client.send(
+                    new DeleteMessageCommand({
+                        QueueUrl: this.queueUrl,
+                        ReceiptHandle: message.ReceiptHandle!,
+                    }),
+                );
+                return;
+            }
 
             try {
                 await this.handlePayload(payload, message.ReceiptHandle!);

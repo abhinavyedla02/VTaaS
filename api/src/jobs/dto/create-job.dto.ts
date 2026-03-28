@@ -1,4 +1,5 @@
 import { IsString, IsNotEmpty, IsOptional, IsIn } from 'class-validator';
+import { SUPPORTED_RESOLUTIONS } from '@vtaas/db';
 
 export class CreateJobDto {
     @IsString()
@@ -14,6 +15,6 @@ export class CreateJobDto {
     note?: string;
 
     @IsOptional()
-    @IsIn(['240p', '360p', '480p', '720p', '1080p'])
+    @IsIn([...SUPPORTED_RESOLUTIONS])
     resolution?: string;
 }

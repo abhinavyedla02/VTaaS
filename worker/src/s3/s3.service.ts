@@ -20,17 +20,16 @@ export class WorkerS3Service implements OnModuleInit {
     private readonly outputBucket = 'vtaas-outputs';
 
     constructor() {
-        const endpoint = process.env.AWS_ENDPOINT_URL || 'http://localstack:4566';
+        const endpoint = process.env.AWS_ENDPOINT_URL;
         const region = process.env.AWS_REGION || 'us-east-1';
 
         this.client = new S3Client({
-            endpoint,
+            ...(endpoint ? { endpoint } : {}),
             region,
-            forcePathStyle: true, // Required for LocalStack
-            credentials: {
-                accessKeyId: 'test',
-                secretAccessKey: 'test',
-            },
+            forcePathStyle: true,
+            ...(endpoint
+                ? { credentials: { accessKeyId: 'test', secretAccessKey: 'test' } }
+                : {}),
         });
     }
 

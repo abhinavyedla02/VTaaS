@@ -327,3 +327,22 @@
 - **Decision:** Replace auto-buffering with manual step-by-step progression. A "Next →" button lets the user advance the diagram stage. The button is disabled when the user has caught up to the real pipeline state. Terminal states auto-advance.
 - **Rationale:** More engaging — turns the diagram into a guided architecture tour. Each click teaches the user what happens at that stage. Backend still runs at full speed; the diagram is a separate visual layer.
 - **Consequence:** Requires the user to click through stages. Slightly more interactive effort, but much more educational. Also bumped throttle from 3/hr to 20/hr for better demo experience.
+
+---
+
+### D-034: Pre-Deployment Cleanup Scope
+- **Status:** Decided (implemented)
+- **Context:** Full codebase scan before Phase 4 identified 10 issues. Scoped a targeted cleanup to fix the items that would block or complicate AWS deployment, while deferring items that are safe in the current architecture.
+- **Fixed:**
+  1. **Hardcoded AWS credentials** — S3 and SQS clients in all 4 services now only set `credentials` when `AWS_ENDPOINT_URL` is present (LocalStack). When absent, the SDK uses the default credential provider chain (ECS task role, env vars).
+  2. **S3 CORS wildcard** — `applyCorsRules()` now reads `CORS_ALLOWED_ORIGINS` env var. Falls back to `*` only when unset.
+  3. **API-level CORS** — Added `app.enableCors()` in `main.ts`, driven by the same `CORS_ALLOWED_ORIGINS` env var.
+  4. **SQS poison pill handling** — `JSON.parse` in the consumer now has its own try/catch. Unparseable messages are deleted immediately instead of retrying 3x.
+  5. **Presigned URL rewrite** — Replaced hardcoded `localstack:4566` → `localhost:4566` swap with `VITE_S3_ENDPOINT` env var.
+  6. **Resolution profile sync** — Exported `SUPPORTED_RESOLUTIONS` from `@vtaas/db`. API DTO and worker ffmpeg service import from the shared source of truth.
+- **Intentionally deferred:**
+  - **TOCTOU race (D-018):** Safe in Phase 0 — SQS VisibilityTimeout prevents concurrent processing. Fix with optimistic locking when scaling to multiple workers.
+  - **Web Dockerfile (dev-only):** Phase 4 uses Vercel for frontend deployment, not containerized web. No action needed.
+  - **Orphaned S3 cleanup:** Current DB-driven cleanup is sufficient at portfolio scale. S3 prefix scanning adds complexity without proportional benefit.
+  - **ESLint:** `tsc --noEmit` with strict mode catches most issues. Adding ESLint is a new dependency and out of scope for this cleanup.
+- **Consequence:** All env-var-driven changes follow the triple-update rule (DEVELOPMENT.md, docker-compose.yml, .env.example). No code changes needed at deploy time — configuration only.

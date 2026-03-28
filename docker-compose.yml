@@ -57,6 +57,7 @@ services:
       - ENQUEUE_ENABLED=true
       - DEV_USER_ID=local_dev_user
       - REQUEST_LOGGING_ENABLED=true
+      - CORS_ALLOWED_ORIGINS=*
     depends_on:
       db:
         condition: service_healthy
@@ -95,6 +96,8 @@ services:
     container_name: vtaas_web
     ports:
       - "5173:5173"
+    environment:
+      - VITE_S3_ENDPOINT=http://localhost:4566
     depends_on:
       - api
     restart: unless-stopped

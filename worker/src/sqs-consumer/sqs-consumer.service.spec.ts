@@ -152,6 +152,41 @@ describe('SqsConsumerService', () => {
             expect(deleteCalls).toHaveLength(0);
         });
 
+        it('deletes poison pill message with unparseable JSON immediately', async () => {
+            mockSend
+                .mockResolvedValueOnce({ QueueUrl: MOCK_QUEUE_URL })
+                // ReceiveMessage returns a message with invalid JSON
+                .mockResolvedValueOnce({
+                    Messages: [{
+                        Body: '<<<not json>>>',
+                        ReceiptHandle: 'receipt-poison',
+                    }],
+                })
+                // DeleteMessage succeeds
+                .mockResolvedValueOnce({})
+                // Next ReceiveMessage: stop polling
+                .mockImplementation(async () => {
+                    await service.onModuleDestroy();
+                    return { Messages: [] };
+                });
+
+            await service.onModuleInit();
+
+            // Let the fire-and-forget polling loop process one cycle
+            await new Promise(resolve => setTimeout(resolve, 50));
+
+            // Verify: DeleteMessageCommand was sent (poison pill deleted)
+            const deleteCalls = mockSend.mock.calls.filter(
+                (call: unknown[]) => call[0] instanceof DeleteMessageCommand,
+            );
+            expect(deleteCalls).toHaveLength(1);
+            const deleteCmd = deleteCalls[0][0] as DeleteMessageCommand;
+            expect(deleteCmd.input.ReceiptHandle).toBe('receipt-poison');
+
+            // Verify: TranscodeService was NOT called
+            expect(mockTranscodeService.processJob).not.toHaveBeenCalled();
+        });
+
         it('handles empty queue response gracefully', async () => {
             mockSend
                 .mockResolvedValueOnce({ QueueUrl: MOCK_QUEUE_URL })

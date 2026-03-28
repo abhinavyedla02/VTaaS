@@ -24,17 +24,16 @@ export class S3Service implements OnModuleInit {
     private readonly bucket = 'vtaas-inputs';
 
     constructor() {
-        const endpoint = process.env.AWS_ENDPOINT_URL || 'http://localstack:4566';
+        const endpoint = process.env.AWS_ENDPOINT_URL;
         const region = process.env.AWS_REGION || 'us-east-1';
 
         this.client = new S3Client({
-            endpoint,
+            ...(endpoint ? { endpoint } : {}),
             region,
-            forcePathStyle: true, // Required for LocalStack
-            credentials: {
-                accessKeyId: 'test',
-                secretAccessKey: 'test',
-            },
+            forcePathStyle: true,
+            ...(endpoint
+                ? { credentials: { accessKeyId: 'test', secretAccessKey: 'test' } }
+                : {}),
         });
     }
 
@@ -59,7 +58,11 @@ export class S3Service implements OnModuleInit {
     }
 
     private async applyCorsRules(): Promise<void> {
-        // TODO: Move to strict env-based CORS for production
+        const originsEnv = process.env.CORS_ALLOWED_ORIGINS;
+        const allowedOrigins = originsEnv
+            ? originsEnv.split(',').map((o) => o.trim())
+            : ['*'];
+
         await this.client.send(
             new PutBucketCorsCommand({
                 Bucket: this.bucket,
@@ -68,7 +71,7 @@ export class S3Service implements OnModuleInit {
                         {
                             AllowedHeaders: ['*'],
                             AllowedMethods: ['PUT', 'GET', 'HEAD'],
-                            AllowedOrigins: ['*'],
+                            AllowedOrigins: allowedOrigins,
                             ExposeHeaders: ['ETag'],
                             MaxAgeSeconds: 3600,
                         },
@@ -76,7 +79,7 @@ export class S3Service implements OnModuleInit {
                 },
             }),
         );
-        this.logger.log(`CORS rules applied to ${this.bucket}`);
+        this.logger.log(`CORS rules applied to ${this.bucket} (origins: ${allowedOrigins.join(', ')})`);
     }
 
     async getPresignedPutUrl(

@@ -21,8 +21,18 @@ export interface JobResponse {
   updatedAt: string;
 }
 
+/**
+ * Rewrite presigned S3 URLs for browser access.
+ * In local dev, presigned URLs contain the Docker-internal hostname (e.g. http://localstack:4566).
+ * VITE_S3_ENDPOINT maps this to a browser-reachable endpoint (e.g. http://localhost:4566).
+ * In production (real AWS), presigned URLs are already browser-reachable — no rewrite needed.
+ */
+const S3_ENDPOINT = import.meta.env.VITE_S3_ENDPOINT as string | undefined;
+
 function fixLocalUrl(url: string): string {
-  return url.replace('http://localstack:4566', 'http://localhost:4566');
+  if (!S3_ENDPOINT) return url;
+  // Replace any http(s)://host:port before the first /bucket path segment
+  return url.replace(/^https?:\/\/[^/]+/, S3_ENDPOINT);
 }
 
 function getActiveStep(status: DemoStatus): number {
@@ -382,7 +392,7 @@ export default function DemoWidget({ status, setStatus, jobResponse, setJobRespo
               />
             </div>
 
-            {/* Resolution selector */}
+            {/* Resolution selector — options must match SUPPORTED_RESOLUTIONS in @vtaas/db */}
             <div className="demo-field-group">
               <label className="demo-label" htmlFor="resolution">
                 Output Resolution

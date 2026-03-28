@@ -151,7 +151,9 @@ npm run build       # full production build (tsc + vite build)
 | `SQS_QUEUE_NAME` | Main transcode queue | `transcode-jobs` |
 | `SQS_DLQ_NAME` | Dead-letter queue | `transcode-jobs-dlq` |
 | `SQS_MAX_RECEIVE_COUNT` | Retries before DLQ | `3` |
+| `CORS_ALLOWED_ORIGINS` | Comma-separated allowed origins for API + S3 CORS | `*` (local dev) |
 | `ENQUEUE_ENABLED` | Gate SQS dispatch (set `false` to disable) | `true` (implicit) |
+| `VITE_S3_ENDPOINT` | Browser-reachable S3 endpoint for presigned URL rewriting | `http://localhost:4566` (local), unset in production |
 | `VITE_SAMPLE_VIDEO_URL` | URL for the sample demo video (frontend) | `/sample-video` (Vite proxy) |
 
 ---
@@ -198,11 +200,12 @@ Because we use the official AWS SDK (`@aws-sdk/client-s3`, `@aws-sdk/client-sqs`
 
 | Variable | Local | Production |
 |----------|-------|------------|
-| `AWS_ENDPOINT_URL` | `http://localstack:4566` | **Remove entirely** |
-| `AWS_ACCESS_KEY_ID` | `test` | Real IAM credentials |
-| `AWS_SECRET_ACCESS_KEY` | `test` | Real IAM credentials |
+| `AWS_ENDPOINT_URL` | `http://localstack:4566` | **Remove entirely** (SDK uses default credential chain) |
+| `AWS_ACCESS_KEY_ID` | (set by `AWS_ENDPOINT_URL` presence) | IAM task role (ECS) or env var |
+| `AWS_SECRET_ACCESS_KEY` | (set by `AWS_ENDPOINT_URL` presence) | IAM task role (ECS) or env var |
+| `CORS_ALLOWED_ORIGINS` | `*` | `https://yourdomain.com` |
 
-The SDK auto-detects real AWS and routes `SqsService`/`S3Service` calls to the cloud.
+When `AWS_ENDPOINT_URL` is unset, the SDK uses the default credential provider chain (ECS task role, env vars, `~/.aws/credentials`).
 
 ### Infrastructure: Must Be Created Separately
 

@@ -24,7 +24,7 @@ export class SqsService implements OnModuleInit {
     private readonly visibilityTimeout: string;
 
     constructor() {
-        const endpoint = process.env.AWS_ENDPOINT_URL || 'http://localstack:4566';
+        const endpoint = process.env.AWS_ENDPOINT_URL;
         const region = process.env.AWS_REGION || 'us-east-1';
 
         this.queueName = process.env.SQS_QUEUE_NAME || 'transcode-jobs';
@@ -33,12 +33,11 @@ export class SqsService implements OnModuleInit {
         this.visibilityTimeout = '300'; // 5 minutes — video processing needs time
 
         this.client = new SQSClient({
-            endpoint,
+            ...(endpoint ? { endpoint } : {}),
             region,
-            credentials: {
-                accessKeyId: 'test',
-                secretAccessKey: 'test',
-            },
+            ...(endpoint
+                ? { credentials: { accessKeyId: 'test', secretAccessKey: 'test' } }
+                : {}),
         });
     }
 

@@ -1,0 +1,44 @@
+{
+  "family": "vtaas-api",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "256",
+  "memory": "512",
+  "executionRoleArn": "arn:aws:iam::339713128261:role/vtaas-ecs-execution-role",
+  "taskRoleArn": "arn:aws:iam::339713128261:role/vtaas-api-task-role",
+  "containerDefinitions": [
+    {
+      "name": "vtaas-api",
+      "image": "339713128261.dkr.ecr.us-east-1.amazonaws.com/vtaas-api:latest",
+      "portMappings": [
+        { "containerPort": 3000, "protocol": "tcp" }
+      ],
+      "environment": [
+        { "name": "NODE_ENV", "value": "production" },
+        { "name": "PORT", "value": "3000" },
+        { "name": "AWS_REGION", "value": "us-east-1" },
+        { "name": "S3_INPUT_BUCKET", "value": "vtaas-inputs-339713128261" },
+        { "name": "S3_OUTPUT_BUCKET", "value": "vtaas-outputs-339713128261" },
+        { "name": "SQS_QUEUE_NAME", "value": "transcode-jobs" },
+        { "name": "ENQUEUE_ENABLED", "value": "true" },
+        { "name": "MAX_UPLOAD_SIZE_BYTES", "value": "20971520" },
+        { "name": "CORS_ALLOWED_ORIGINS", "value": "*" }
+      ],
+      "secrets": [
+        {
+          "name": "DATABASE_URL",
+          "valueFrom": "arn:aws:ssm:us-east-1:339713128261:parameter/vtaas/DATABASE_URL"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/vtaas-api",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "api"
+        }
+      },
+      "essential": true
+    }
+  ]
+}

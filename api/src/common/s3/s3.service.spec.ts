@@ -35,6 +35,18 @@ describe('S3Service', () => {
     });
 
     describe('onModuleInit', () => {
+        beforeEach(() => {
+            // onModuleInit only creates buckets when AWS_ENDPOINT_URL is set (LocalStack)
+            process.env.AWS_ENDPOINT_URL = 'http://localstack:4566';
+            // Re-instantiate service so constructor picks up the env
+            service = new S3Service();
+            mockSend = service.getClient().send as jest.Mock;
+        });
+
+        afterEach(() => {
+            delete process.env.AWS_ENDPOINT_URL;
+        });
+
         it('should skip bucket creation if bucket already exists', async () => {
             // HeadBucket succeeds = bucket exists
             mockSend.mockResolvedValueOnce({});

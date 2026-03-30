@@ -52,7 +52,7 @@ describe('JobsService', () => {
             providers: [
                 JobsService,
                 { provide: PrismaService, useValue: mockPrisma },
-                { provide: S3Service, useValue: { headObject: mockHeadObject, getDownloadUrl: mockGetDownloadUrl } },
+                { provide: S3Service, useValue: { headObject: mockHeadObject, getDownloadUrl: mockGetDownloadUrl, getOutputBucket: jest.fn().mockReturnValue('vtaas-outputs') } },
                 { provide: SqsService, useValue: { enqueueTranscode: mockEnqueueTranscode } },
             ],
         }).compile();

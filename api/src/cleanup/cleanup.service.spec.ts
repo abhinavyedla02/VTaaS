@@ -18,6 +18,8 @@ describe('CleanupService', () => {
         };
         mockS3 = {
             deleteObject: jest.fn(),
+            getBucket: jest.fn().mockReturnValue('vtaas-inputs'),
+            getOutputBucket: jest.fn().mockReturnValue('vtaas-outputs'),
         };
 
         const module: TestingModule = await Test.createTestingModule({

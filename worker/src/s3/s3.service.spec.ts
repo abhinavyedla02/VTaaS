@@ -30,6 +30,17 @@ describe('WorkerS3Service', () => {
     });
 
     describe('onModuleInit (bucket creation)', () => {
+        beforeEach(() => {
+            // onModuleInit only creates buckets when AWS_ENDPOINT_URL is set (LocalStack)
+            process.env.AWS_ENDPOINT_URL = 'http://localstack:4566';
+            // Re-instantiate service so constructor picks up the env
+            service = new WorkerS3Service();
+            mockSend = service.getClient().send as jest.Mock;
+        });
+
+        afterEach(() => {
+            delete process.env.AWS_ENDPOINT_URL;
+        });
         it('should skip creation if vtaas-outputs bucket already exists', async () => {
             mockSend.mockResolvedValueOnce({}); // HeadBucket succeeds
 

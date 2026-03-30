@@ -23,8 +23,14 @@ describe('SqsService', () => {
 
     beforeEach(() => {
         jest.clearAllMocks();
+        // onModuleInit create-queue path only runs when AWS_ENDPOINT_URL is set
+        process.env.AWS_ENDPOINT_URL = 'http://localstack:4566';
         service = new SqsService();
         mockSend = service.getClient().send as jest.Mock;
+    });
+
+    afterEach(() => {
+        delete process.env.AWS_ENDPOINT_URL;
     });
 
     describe('onModuleInit', () => {

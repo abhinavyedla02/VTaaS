@@ -37,6 +37,7 @@ describe('TranscodeService', () => {
         headObject: jest.Mock;
         getObject: jest.Mock;
         putObject: jest.Mock;
+        getInputBucket: jest.Mock;
         getOutputBucket: jest.Mock;
     };
     let mockFfmpeg: { transcode: jest.Mock };
@@ -73,6 +74,7 @@ describe('TranscodeService', () => {
             headObject: jest.fn(),
             getObject: jest.fn(),
             putObject: jest.fn().mockResolvedValue(undefined),
+            getInputBucket: jest.fn().mockReturnValue('vtaas-inputs'),
             getOutputBucket: jest.fn().mockReturnValue('vtaas-outputs'),
         };
 

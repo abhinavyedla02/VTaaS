@@ -54,6 +54,8 @@ services:
       - SQS_QUEUE_NAME=transcode-jobs
       - SQS_DLQ_NAME=transcode-jobs-dlq
       - SQS_MAX_RECEIVE_COUNT=3
+      - S3_INPUT_BUCKET=vtaas-inputs
+      - S3_OUTPUT_BUCKET=vtaas-outputs
       - ENQUEUE_ENABLED=true
       - DEV_USER_ID=local_dev_user
       - REQUEST_LOGGING_ENABLED=true
@@ -78,6 +80,8 @@ services:
       - SQS_QUEUE_NAME=transcode-jobs
       - SQS_DLQ_NAME=transcode-jobs-dlq
       - SQS_MAX_RECEIVE_COUNT=3
+      - S3_INPUT_BUCKET=vtaas-inputs
+      - S3_OUTPUT_BUCKET=vtaas-outputs
       - AWS_ACCESS_KEY_ID=test
       - AWS_SECRET_ACCESS_KEY=test
       - MAX_VIDEO_DURATION_SECONDS=60

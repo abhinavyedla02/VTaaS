@@ -17,16 +17,20 @@ export interface ObjectMetadata {
 export class WorkerS3Service implements OnModuleInit {
     private readonly logger = new Logger(WorkerS3Service.name);
     private readonly client: S3Client;
-    private readonly outputBucket = 'vtaas-outputs';
+    private readonly inputBucket: string;
+    private readonly outputBucket: string;
 
     constructor() {
         const endpoint = process.env.AWS_ENDPOINT_URL;
         const region = process.env.AWS_REGION || 'us-east-1';
 
+        this.inputBucket = process.env.S3_INPUT_BUCKET || 'vtaas-inputs';
+        this.outputBucket = process.env.S3_OUTPUT_BUCKET || 'vtaas-outputs';
+
         this.client = new S3Client({
             ...(endpoint ? { endpoint } : {}),
             region,
-            forcePathStyle: true,
+            ...(endpoint ? { forcePathStyle: true } : {}),
             ...(endpoint
                 ? { credentials: { accessKeyId: 'test', secretAccessKey: 'test' } }
                 : {}),
@@ -34,7 +38,11 @@ export class WorkerS3Service implements OnModuleInit {
     }
 
     async onModuleInit(): Promise<void> {
-        await this.ensureOutputBucketExists();
+        // Only create/verify bucket on LocalStack. In production the bucket
+        // is provisioned by the infra script and the task role has no CreateBucket perm.
+        if (process.env.AWS_ENDPOINT_URL) {
+            await this.ensureOutputBucketExists();
+        }
     }
 
     private async ensureOutputBucketExists(): Promise<void> {
@@ -111,6 +119,10 @@ export class WorkerS3Service implements OnModuleInit {
     /** Expose for testing */
     getClient(): S3Client {
         return this.client;
+    }
+
+    getInputBucket(): string {
+        return this.inputBucket;
     }
 
     getOutputBucket(): string {

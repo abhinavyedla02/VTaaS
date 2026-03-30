@@ -148,6 +148,8 @@ npm run build       # full production build (tsc + vite build)
 | `MAX_VIDEO_DURATION_SECONDS` | Maximum allowed video length | `60` |
 | `AWS_ENDPOINT_URL` | LocalStack endpoint | `http://localstack:4566` (Docker) |
 | `AWS_REGION` | AWS region for S3/SQS client | `us-east-1` |
+| `S3_INPUT_BUCKET` | S3 bucket for uploaded input files | `vtaas-inputs` (local), `vtaas-inputs-<account>` (prod) |
+| `S3_OUTPUT_BUCKET` | S3 bucket for transcoded output files | `vtaas-outputs` (local), `vtaas-outputs-<account>` (prod) |
 | `SQS_QUEUE_NAME` | Main transcode queue | `transcode-jobs` |
 | `SQS_DLQ_NAME` | Dead-letter queue | `transcode-jobs-dlq` |
 | `SQS_MAX_RECEIVE_COUNT` | Retries before DLQ | `3` |

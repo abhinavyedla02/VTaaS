@@ -55,7 +55,7 @@ export class TranscodeService {
             await fs.promises.mkdir(tmpDir, { recursive: true });
 
             // STEP 4b — Download input once (shared across all profiles)
-            const inputBuffer = await this.s3.getObject('vtaas-inputs', inputKey);
+            const inputBuffer = await this.s3.getObject(this.s3.getInputBucket(), inputKey);
             const inputPath = path.join(tmpDir, `input${path.extname(inputKey)}`);
             await fs.promises.writeFile(inputPath, inputBuffer);
 

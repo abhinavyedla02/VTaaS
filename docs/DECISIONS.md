@@ -346,3 +346,37 @@
   - **Orphaned S3 cleanup:** Current DB-driven cleanup is sufficient at portfolio scale. S3 prefix scanning adds complexity without proportional benefit.
   - **ESLint:** `tsc --noEmit` with strict mode catches most issues. Adding ESLint is a new dependency and out of scope for this cleanup.
 - **Consequence:** All env-var-driven changes follow the triple-update rule (DEVELOPMENT.md, docker-compose.yml, .env.example). No code changes needed at deploy time — configuration only.
+
+
+---
+## D-035: AWS Resources (us-east-1)
+
+| Resource | Name/ARN | Notes |
+|----------|----------|-------|
+| ECR (API) | `<account>.dkr.ecr.us-east-1.amazonaws.com/vtaas-api` | |
+| ECR (Worker) | `<account>.dkr.ecr.us-east-1.amazonaws.com/vtaas-worker` | |
+| S3 (inputs) | `vtaas-inputs-<account>` | CORS enabled |
+| S3 (outputs) | `vtaas-outputs-<account>` | CORS enabled |
+| S3 (samples) | `vtaas-samples-<account>` | Presigned URL access |
+| SQS (main) | `transcode-jobs` | VisibilityTimeout: 300s |
+| SQS (DLQ) | `transcode-jobs-dlq` | maxReceiveCount: 3 |
+| SSM | `/vtaas/DATABASE_URL` | SecureString, Neon connection |
+| Neon | `vtaas-prod` | aws-us-east-1, free tier |
+
+### D-036: Infra approach — CLI scripts over Terraform
+Single-environment portfolio project. CLI scripts force understanding of 
+every AWS primitive and are checked into infra/scripts/. Would use Terraform 
+for multi-environment production.
+
+### D-037: Worker always-on (for now)
+Worker runs with desiredCount=1 (min=1) to avoid 2-3 minute cold start 
+during demos. Scale-to-zero via step scaling + CloudWatch alarm on SQS 
+queue depth is a planned optimization. Potential enhancement: pre-warm 
+worker when page loads.
+
+### D-038: Frontend deployment — standalone Vercel project
+web/ deploys directly to Vercel as a standalone project page 
+(vtaas.yourdomain.com). It is already a complete, self-contained page 
+with Hero, DemoWidget, SystemDiagram, AboutStack, and WhatsNext sections.
+When a broader developer portfolio site is built, it links to this URL — 
+no component embedding or cross-repo coupling.

@@ -3,6 +3,7 @@ import {
     SQSClient,
     CreateQueueCommand,
     GetQueueAttributesCommand,
+    GetQueueUrlCommand,
     SendMessageCommand,
 } from '@aws-sdk/client-sqs';
 
@@ -42,7 +43,17 @@ export class SqsService implements OnModuleInit {
     }
 
     async onModuleInit(): Promise<void> {
-        await this.ensureQueuesExist();
+        if (process.env.AWS_ENDPOINT_URL) {
+            // LocalStack: create queues on startup (idempotent)
+            await this.ensureQueuesExist();
+        } else {
+            // Production: queues are pre-provisioned by infra script — just resolve the URL
+            const result = await this.client.send(
+                new GetQueueUrlCommand({ QueueName: this.queueName }),
+            );
+            this.queueUrl = result.QueueUrl!;
+            this.logger.log(`Queue URL resolved: ${this.queueName}`);
+        }
     }
 
     private async ensureQueuesExist(): Promise<void> {

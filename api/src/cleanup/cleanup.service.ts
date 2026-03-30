@@ -30,12 +30,12 @@ export class CleanupService {
             for (const job of oldJobs) {
                 try {
                     // 1. Delete Input File
-                    await this.s3.deleteObject('vtaas-inputs', job.inputKey);
-                    
+                    await this.s3.deleteObject(this.s3.getBucket(), job.inputKey);
+
                     // 2. Delete Output Files
                     const keys = Array.isArray(job.outputKeys) ? job.outputKeys as string[] : [];
                     for (const key of keys) {
-                        await this.s3.deleteObject('vtaas-outputs', key);
+                        await this.s3.deleteObject(this.s3.getOutputBucket(), key);
                     }
 
                     // 3. Delete DB record

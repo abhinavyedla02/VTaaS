@@ -111,7 +111,7 @@ export class JobsService {
             typeof job.outputKeys[0] === 'string'
         ) {
             downloadUrl = await this.s3Service.getDownloadUrl(
-                'vtaas-outputs',
+                this.s3Service.getOutputBucket(),
                 job.outputKeys[0] as string,
             );
         }

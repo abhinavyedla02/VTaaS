@@ -119,6 +119,17 @@ cat > /tmp/worker-task-policy.json << EOF
       ]
     },
     {
+      "Sid": "S3ListBucket",
+      "Effect": "Allow",
+      "Action": [
+        "s3:ListBucket"
+      ],
+      "Resource": [
+        "arn:aws:s3:::vtaas-inputs-${ACCOUNT_ID}",
+        "arn:aws:s3:::vtaas-outputs-${ACCOUNT_ID}"
+      ]
+    },
+    {
       "Sid": "SQSConsume",
       "Effect": "Allow",
       "Action": [

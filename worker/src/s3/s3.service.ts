@@ -34,6 +34,7 @@ export class WorkerS3Service implements OnModuleInit {
             ...(endpoint
                 ? { credentials: { accessKeyId: 'test', secretAccessKey: 'test' } }
                 : {}),
+            responseChecksumValidation: 'WHEN_REQUIRED',
         });
     }
 

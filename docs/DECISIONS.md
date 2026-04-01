@@ -375,8 +375,43 @@ queue depth is a planned optimization. Potential enhancement: pre-warm
 worker when page loads.
 
 ### D-038: Frontend deployment — standalone Vercel project
-web/ deploys directly to Vercel as a standalone project page 
-(vtaas.yourdomain.com). It is already a complete, self-contained page 
+web/ deploys directly to Vercel as a standalone project page
+(vtaas.yourdomain.com). It is already a complete, self-contained page
 with Hero, DemoWidget, SystemDiagram, AboutStack, and WhatsNext sections.
-When a broader developer portfolio site is built, it links to this URL — 
+When a broader developer portfolio site is built, it links to this URL —
 no component embedding or cross-repo coupling.
+
+---
+
+### D-039: Docker images for Fargate must be built with --platform linux/amd64
+- **Status:** Decided (lesson learned Phase 4 Session 3)
+- **Context:** Mac Apple Silicon (M-series) defaults to `linux/arm64` when running `docker build`. ECS Fargate (x86) requires `linux/amd64`. The worker image pushed in Session 3 without the flag caused `CannotPullContainerError` on the first deployment attempt. The API image happened to be built correctly in Session 2.
+- **Decision:** All `docker build` commands targeting ECR/Fargate must include `--platform linux/amd64`.
+- **Canonical build command:**
+  ```bash
+  docker build --platform linux/amd64 -t <image> -f <service>/Dockerfile .
+  ```
+- **Consequence:** Build time increases slightly on Apple Silicon (cross-compilation via QEMU). Images will not run natively on the dev machine with `docker run` unless the flag is also passed there. For local development, omit the flag; for ECR pushes, always include it.
+
+---
+
+### D-040: s3:ListBucket required for HeadObject on non-existent keys; SDK v3 CRC64NVME default
+- **Status:** Decided (lesson learned Phase 4 Session 3)
+- **Context:** Two separate bugs surfaced during the first E2E test in AWS.
+
+**Bug 1 — CRC64NVME checksum (UnknownError on GetObject)**
+S3 now automatically stores `ChecksumCRC64NVME` on newly uploaded objects (new S3 data integrity default).
+AWS SDK v3 defaults to `responseChecksumValidation: 'WHEN_SUPPORTED'`, which sends `x-amz-checksum-mode: ENABLED` on GET requests and attempts local CRC64NVME validation — a hash function not implemented in Node.js.
+Result: `GetObjectCommand` throws `UnknownError` on every S3 download.
+Fix: set `responseChecksumValidation: 'WHEN_REQUIRED'` on the S3Client. Applied in `worker/src/s3/s3.service.ts`.
+
+**Bug 2 — s3:ListBucket missing → HeadObject returns 403 instead of 404**
+AWS S3 intentionally returns `403 Forbidden` (not `404 Not Found`) on `HeadObject` calls to non-existent keys when the caller lacks `s3:ListBucket` permission. This prevents key enumeration by unauthorized callers.
+Local dev used admin credentials (full s3:*), so `HeadObject` on missing keys returned 404 normally.
+The ECS task role had `s3:HeadObject` but not `s3:ListBucket` → 403 in production.
+The worker's `headObject` catch correctly handles 404/NotFound but re-throws everything else — so 403 propagated as `UnknownError` and the job failed.
+`iam:simulate-principal-policy` reported "allowed" — that simulation does **not** model this S3 behavior quirk.
+Fix: add `s3:ListBucket` on bucket ARNs (not `/*`) to `vtaas-worker-task-role`. IAM policy changes take effect immediately; no redeploy required.
+`02-create-iam-roles.sh` updated with the `S3ListBucket` statement so future reprovisioning is correct.
+
+- **Rule:** Any role that calls `HeadObject` on potentially non-existent keys must also have `s3:ListBucket` on the bucket ARN (no wildcard suffix).

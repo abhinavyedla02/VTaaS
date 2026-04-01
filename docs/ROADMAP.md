@@ -245,7 +245,7 @@ A visitor lands on the portfolio page, sees a sleek upload form, drops a short v
 
 ---
 
-### ISSUE-11: AWS Infrastructure Setup — ⬜ Planned
+### ISSUE-11: AWS Infrastructure Setup — ✅ Complete
 - **Deployment stack:** ECS Fargate (API + Worker), ECR (images), S3, SQS, Neon (Postgres), ALB (API only)
 - **Work:**
   1. Provision S3 buckets (`vtaas-inputs`, `vtaas-outputs`) in real AWS
@@ -259,7 +259,7 @@ A visitor lands on the portfolio page, sees a sleek upload form, drops a short v
 - **Proof:** `aws s3 ls`, `aws sqs list-queues`, ECR repo list, Neon migration output, billing alert screenshot
 - **Rollback:** `terraform destroy` or manual resource deletion
 
-### ISSUE-12: API Deployment (ECS Fargate + ALB) — ⬜ Planned
+### ISSUE-12: API Deployment (ECS Fargate + ALB) — ✅ Complete (HTTP; HTTPS/custom domain deferred)
 - **Work:**
   1. Push API Docker image to ECR via GitHub Actions (add deploy job to CI workflow)
   2. ECS task definition: API container, env vars (Neon connection string, S3/SQS config, `ENQUEUE_ENABLED=true`)
@@ -270,7 +270,7 @@ A visitor lands on the portfolio page, sees a sleek upload form, drops a short v
 - **Proof:** curl output; browser network tab showing no CORS errors from Vercel domain
 - **Rollback:** Scale ECS service to 0 tasks
 
-### ISSUE-13: Worker Deployment (ECS Fargate) — ⬜ Planned
+### ISSUE-13: Worker Deployment (ECS Fargate) — ✅ Complete
 - **Work:**
   1. Push Worker Docker image to ECR via GitHub Actions
   2. ECS task definition: Worker container, env vars (Neon connection string, S3/SQS config)

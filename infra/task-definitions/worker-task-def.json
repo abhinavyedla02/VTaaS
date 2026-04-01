@@ -1,0 +1,38 @@
+{
+  "family": "vtaas-worker",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "arn:aws:iam::339713128261:role/vtaas-ecs-execution-role",
+  "taskRoleArn": "arn:aws:iam::339713128261:role/vtaas-worker-task-role",
+  "containerDefinitions": [
+    {
+      "name": "vtaas-worker",
+      "image": "339713128261.dkr.ecr.us-east-1.amazonaws.com/vtaas-worker:latest",
+      "environment": [
+        { "name": "NODE_ENV", "value": "production" },
+        { "name": "AWS_REGION", "value": "us-east-1" },
+        { "name": "S3_INPUT_BUCKET", "value": "vtaas-inputs-339713128261" },
+        { "name": "S3_OUTPUT_BUCKET", "value": "vtaas-outputs-339713128261" },
+        { "name": "SQS_QUEUE_NAME", "value": "transcode-jobs" },
+        { "name": "MAX_VIDEO_DURATION_SECONDS", "value": "60" }
+      ],
+      "secrets": [
+        {
+          "name": "DATABASE_URL",
+          "valueFrom": "arn:aws:ssm:us-east-1:339713128261:parameter/vtaas/DATABASE_URL"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/vtaas-worker",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "worker"
+        }
+      },
+      "essential": true
+    }
+  ]
+}

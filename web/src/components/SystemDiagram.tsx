@@ -292,7 +292,7 @@ export default function SystemDiagram({
                 onClick={handleNext}
                 disabled={!canAdvance}
               >
-                Next →
+                Next Step →
               </button>
             )}
           </div>

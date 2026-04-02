@@ -23,4 +23,4 @@ notes/
 # sample video (large binary — seed via S3, don't commit)
 infra/sample.mp4
 
-.cursor/
+.cursor/infra/Sample.mov

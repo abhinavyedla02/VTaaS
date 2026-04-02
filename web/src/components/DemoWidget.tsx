@@ -111,14 +111,9 @@ export default function DemoWidget({ status, setStatus, jobResponse, setJobRespo
     };
   }, []);
 
-  // Scroll to diagram when polling starts — prompt user to click Next
-  useEffect(() => {
-    if (isPolling) {
-      setTimeout(() => {
-        document.getElementById('diagram')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 400);
-    }
-  }, [isPolling]);
+  const scrollToDiagram = () => {
+    document.getElementById('diagram')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   // Scroll back to demo panels when diagram walk-through completes
   useEffect(() => {
@@ -566,7 +561,7 @@ export default function DemoWidget({ status, setStatus, jobResponse, setJobRespo
                     <div className="demo-spinner" />
                     <div className="demo-status-text">
                       {isTerminal
-                        ? 'Pipeline complete — click Next on the diagram to see each stage'
+                        ? 'Pipeline complete — walk through each stage below'
                         : message}
                       {jobResponse && !isTerminal && (
                         <>
@@ -576,6 +571,12 @@ export default function DemoWidget({ status, setStatus, jobResponse, setJobRespo
                       )}
                     </div>
                   </div>
+                  <button
+                    className="demo-view-pipeline-btn"
+                    onClick={scrollToDiagram}
+                  >
+                    ↓ Click through the diagram to proceed
+                  </button>
                 </div>
               )}
 

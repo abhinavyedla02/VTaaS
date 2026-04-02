@@ -4,6 +4,20 @@
   position: relative;
 }
 
+.hero-back-link {
+  position: absolute;
+  top: var(--space-lg);
+  left: var(--space-lg);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.hero-back-link:hover {
+  color: var(--color-text-secondary);
+}
+
 .hero::before {
   content: '';
   position: absolute;

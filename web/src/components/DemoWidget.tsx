@@ -60,7 +60,7 @@ const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
 const POLL_INTERVAL_MS = 2000;
 const SAMPLE_VIDEO_URL =
   import.meta.env.VITE_SAMPLE_VIDEO_URL ||
-  'https://vtaas-samples-339713128261.s3.us-east-1.amazonaws.com/sample-video.mov';
+  'https://vtaas-samples-339713128261.s3.us-east-1.amazonaws.com/sample-video.mp4';
 
 function validateFile(f: File): string | null {
   if (!ACCEPTED_TYPES.has(f.type)) {

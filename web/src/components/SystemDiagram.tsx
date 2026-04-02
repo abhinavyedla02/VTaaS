@@ -130,6 +130,7 @@ interface SystemDiagramProps {
   maxReachableStage: number;
   isFailed: boolean;
   isActive: boolean;
+  pulseNext: boolean;
 }
 
 export default function SystemDiagram({
@@ -138,6 +139,7 @@ export default function SystemDiagram({
   maxReachableStage,
   isFailed,
   isActive,
+  pulseNext,
 }: SystemDiagramProps) {
   const nodeMap = new Map(NODES.map((n) => [n.id, n]));
   const activeNodes = isFailed
@@ -278,12 +280,15 @@ export default function SystemDiagram({
         {/* Stage navigation */}
         {isActive && (
           <div className="diagram-controls">
+            {pulseNext && canAdvance && (
+              <span className="diagram-next-hint">Walk through the pipeline →</span>
+            )}
             {stageLabel && (
               <span className="diagram-stage-label">{stageLabel}</span>
             )}
             {showButton && (
               <button
-                className="diagram-next-btn"
+                className={['diagram-next-btn', pulseNext && canAdvance ? 'pulsing' : ''].filter(Boolean).join(' ')}
                 onClick={handleNext}
                 disabled={!canAdvance}
               >

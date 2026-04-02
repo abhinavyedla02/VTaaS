@@ -111,6 +111,24 @@ export default function DemoWidget({ status, setStatus, jobResponse, setJobRespo
     };
   }, []);
 
+  // Scroll to diagram when polling starts — prompt user to click Next
+  useEffect(() => {
+    if (isPolling) {
+      setTimeout(() => {
+        document.getElementById('diagram')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 400);
+    }
+  }, [isPolling]);
+
+  // Scroll back to demo panels when diagram walk-through completes
+  useEffect(() => {
+    if (diagramComplete && status === 'succeeded') {
+      setTimeout(() => {
+        document.getElementById('demo')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 300);
+    }
+  }, [diagramComplete, status]);
+
   const stopPolling = useCallback(() => {
     if (pollRef.current !== null) {
       clearInterval(pollRef.current);

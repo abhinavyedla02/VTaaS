@@ -31,6 +31,7 @@ export default function App() {
           maxReachableStage={getMaxReachableStage(status, jobResponse?.status)}
           isFailed={status === 'failed'}
           isActive={status !== 'idle' && status !== 'error'}
+          pulseNext={status === 'polling' || status === 'succeeded'}
         />
         <AboutStack />
         <WhatsNext />

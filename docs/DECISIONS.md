@@ -536,9 +536,39 @@ Credit runway extends from ~25 days to ~75–90 days at the new gross rate.
 - **Single-AZ ALB.** Rejected for resilience reasons (AZ-level outage takes site down) for no meaningful cost reduction.
 - **Migrating worker off Fargate to EC2 Spot.** Rejected. EC2 Spot is cheaper per vCPU-hr but introduces instance lifecycle management, AMI maintenance, and AutoScaling group configuration — operational burden that doesn't fit a portfolio project.
 
+### Post-optimization state: frozen via hibernate-deep
+
+After the live optimizations above were committed and pushed, the project was frozen on 2026-05-21 via `./scripts/vtaas-ops.sh hibernate-deep`. This took the cost further from the ~$37/mo live floor to **~$0.50/mo** by removing the two pieces of structural cost (ALB and IPv4) that couldn't be touched while serving traffic:
+
+- Both ECS services scaled to `desiredCount=0` (drained, then idle)
+- ALB and its HTTP:80 listener deleted
+- ALB + listener config snapshotted to `~/.vtaas-ops/last-alb.json` and `~/.vtaas-ops/last-listeners.json` for clean recreation
+- Static portfolio frontend on Vercel continues to serve normally; `/api/*` requests fail (no ALB to rewrite to) — accepted as the cost of freezing
+
+Frozen-state monthly cost:
+
+| Service | $/mo |
+|---|---|
+| ECR storage (post-lifecycle, ~3 GB/repo × 2) | ~$0.50 |
+| Everything else (S3, CloudWatch, Route 53 — within free tier) | $0.00 |
+| **Frozen total** | **~$0.50** |
+
+ECS services, capacity providers, task definitions, target group, security groups, IAM roles, ECR images, and S3 buckets are all preserved. Resume rebuilds only the ALB and re-scales the services.
+
+#### Resume procedure
+
+Documented in `RESUME.md` at repo root. Three steps:
+
+1. `./scripts/vtaas-ops.sh resume-deep` — recreates ALB + HTTP listener, scales both services back to 1
+2. Update Vercel `vercel.json` `/api/*` rewrite destination to the new ALB DNS (the script prints it on completion)
+3. Trigger a Vercel redeploy
+
+The new ALB DNS will differ from `vtaas-alb-622316371.us-east-1.elb.amazonaws.com` because AWS regenerates the DNS at ALB creation time. The saved JSON in `~/.vtaas-ops/last-alb.json` is a reference for the prior state (subnets, SGs, listener config — all of which the script re-uses from CONFIG, not from the JSON).
+
 ### References
 
 - Optimization brief: in conversation history (not in repo)
 - Baseline measurements: `docs/private/optimization-baseline-20260521.md` (gitignored)
 - Tooling: `scripts/vtaas-ops.sh`, `scripts/ecr-lifecycle.json`
+- Resume procedure: `RESUME.md` (repo root)
 - Prior decisions referenced: D-011 (SQS configuration), D-035 (AWS resources), D-037 (worker always-on)

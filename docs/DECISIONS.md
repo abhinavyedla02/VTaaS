@@ -415,3 +415,160 @@ Fix: add `s3:ListBucket` on bucket ARNs (not `/*`) to `vtaas-worker-task-role`. 
 `02-create-iam-roles.sh` updated with the `S3ListBucket` statement so future reprovisioning is correct.
 
 - **Rule:** Any role that calls `HeadObject` on potentially non-existent keys must also have `s3:ListBucket` on the bucket ARN (no wildcard suffix).
+
+---
+
+## D-041: AWS Cost Optimization (May 2026)
+
+- **Status:** Decided (implemented 2026-05-21)
+- **Scope:** ECS Fargate sizing & pricing model, ECR lifecycle, CloudWatch retention, budget alerting. Live optimization only — does not change application code, CI/CD, networking, or external dependencies (Neon, S3, Vercel).
+
+### Context
+
+April 2026 gross AWS spend was $57.65/month, fully covered by remaining free-tier credit. Credit runway was approximately 25 days at burn rate. After credit exhaustion the project would have shifted from "free portfolio demo" to "out-of-pocket portfolio demo" at the same gross rate. The optimization target was bringing gross to ~$20/month while keeping the site continuously live.
+
+April line items:
+
+| Service | Cost | Note |
+|---|---|---|
+| ECS Fargate | $26.66 | 540 vCPU-hrs + 1,080 GB-hrs across 2 always-on tasks |
+| ALB | $16.20 | 720 hrs × $0.0225 fixed cost |
+| VPC Public IPv4 | $14.41 | 2,882 IP-hours |
+| ECR storage | $0.38 | 3.76 GB |
+| Everything else (CW, S3, SQS, KMS) | $0.00 | Inside free tier |
+| **Total** | **$57.65** | |
+
+Architectural constraints carried forward unchanged from prior decisions: always-on worker (D-037), Neon Postgres, ECS Fargate, ALB, Vercel-hosted frontend with `/api/*` rewrites. None of these were revisited.
+
+### Discovery
+
+Two ECS services exist (not one as the original optimization brief assumed): `vtaas-api` (HTTP backend behind the ALB, target group `vtaas-api-tg`) and `vtaas-worker` (SQS consumer for ffmpeg transcoding). Both ran on-demand Fargate without capacity providers configured at the cluster level.
+
+Sizing before optimization:
+
+| Service | vCPU | Memory | Per-month $ |
+|---|---|---|---|
+| `vtaas-worker` | 0.5 | 1 GB | $17.77 |
+| `vtaas-api` | 0.25 | 0.5 GB | $8.89 |
+
+Math reconciles exactly to billed 540 vCPU-hrs and 1,080 GB-hrs.
+
+14-day CloudWatch utilization (336 hourly samples, 2026-05-07 → 2026-05-21):
+
+| Service | CPU avg | CPU peak | Memory avg | Memory peak |
+|---|---|---|---|---|
+| `vtaas-worker` | 0.03% | 21.99% | 3.71% | 3.96% (~41 MB of 1024) |
+| `vtaas-api` | 0.08% | 71.26% | 9.90% | 10.35% (~53 MB of 512) |
+
+### Decisions
+
+#### 1. CloudWatch log retention → 14 days
+
+Both `/ecs/vtaas-api` and `/ecs/vtaas-worker` had no retention set (AWS default is infinite). API group had grown to ~75 MB; without a cap, it would grow unbounded against the 5 GB CloudWatch free tier. Set to 14 days — long enough for debugging a recent incident, short enough that any single hot logger doesn't push us over free tier.
+
+#### 2. ECR lifecycle policies
+
+ECR storage had grown from 3.76 GB (April bill) to 12.68 GB by May 21 — a **3.4× increase in six weeks**. At the observed growth rate, year-end ECR cost without intervention would have been ~$5/mo. CI/CD pushes a new image per commit; without a sweeper, old revisions accumulate indefinitely.
+
+Applied policy to both `vtaas-api` and `vtaas-worker` repos:
+- Keep last 10 tagged images
+- Expire untagged images older than 7 days
+
+The 10-tagged cap covers rollback to any of the last 10 deploys. Untagged images are CI build remnants and have no operational value after a week.
+
+#### 3. ALB AZ count
+
+Audited: already on 2 AZs (`us-east-1b`, `us-east-1e`). No change. The minimum for ALB high availability is 2 AZs; we were already at the floor. Going to 1 AZ would have saved nothing meaningful relative to its risk (single-AZ outage takes the site down).
+
+#### 4. Fargate task right-sizing
+
+**`vtaas-worker`: 0.5 vCPU / 1 GB → 0.25 vCPU / 0.5 GB** (Fargate minimum).
+
+CPU avg 0.03% and memory peak 4% mean the worker uses <50 MB of its 1 GB allocation 99% of the time. The 22% CPU peak corresponds to occasional ffmpeg work. Dropping to half the CPU will roughly double ffmpeg wallclock per job, which is acceptable for a queue-driven workload with no SLA. Memory headroom remains ~10× peak usage even at the new size.
+
+The worker utilization data also validates the original always-on architectural choice (D-037). At the new Spot pricing of ~$2.67/mo, scale-to-zero engineering complexity (CloudWatch alarm + step scaling on SQS depth, cold-start latency on first job, alarm tuning) is uneconomical — there's no payback window where saving $2.67/mo justifies that engineering investment. Always-on is the right call *because* the workload is so cheap once right-sized.
+
+**`vtaas-api`: no change.** Already at the Fargate minimum (0.25 vCPU / 0.5 GB). Memory is over-provisioned (10% peak), but Fargate doesn't permit less than 0.5 GB at this CPU tier. The 71% CPU peak is a sub-minute burst on a 0.25 vCPU allocation — would not be a concern at 0.5 vCPU, but since we can't go smaller, the burst is what it is. No action.
+
+#### 5. Fargate Spot capacity providers
+
+Cluster previously had no capacity providers configured (`launchType: FARGATE` directly on each service). Added `FARGATE` + `FARGATE_SPOT` to the cluster, then assigned a workload-specific strategy per service:
+
+**`vtaas-worker` → 100% `FARGATE_SPOT`** (`capacityProvider=FARGATE_SPOT,weight=1`).
+Queue-driven, idempotent, SQS retries on interruption. If a Spot reclaim happens mid-job:
+- AWS sends `SIGTERM` with a 2-minute warning
+- In-flight SQS messages have a 300s `VisibilityTimeout` (D-011); they reappear and are picked up by the replacement task
+- No user-visible impact
+
+**`vtaas-api` → 80/20 Spot/On-Demand** (`capacityProvider=FARGATE_SPOT,weight=4 capacityProvider=FARGATE,weight=1`).
+Synchronous HTTP. A 2-minute reclaim warning followed by task termination means brief request failures during the replacement deploy. Pure 100% Spot here trades meaningful availability for ~$2/mo. The 80/20 mix captures most of the savings (~$10 of the ~$12 max) while keeping On-Demand in the placement strategy.
+
+**The desiredCount=1 statistical distribution caveat**: ECS capacity provider weights are placement-time, not runtime. With `desiredCount=1`, the 80/20 split for `vtaas-api` manifests as statistical distribution across task restart events, not as concurrent task placement. At any given moment the single API task is fully on one provider. Long-run interruption exposure averages to ~80%. For VTaaS's portfolio traffic this is acceptable; for a higher-availability service the answer would be raising `desiredCount` to 5 so the 4:1 ratio actually runs concurrently.
+
+#### 6. Budget alert
+
+Existing `vtaas-monthly` budget was at $15. Raised to $30 with 80% actual threshold alerting `abhinavyedla02@gmail.com`. $30 chosen to sit above the projected steady-state of ~$22/mo (Fargate + ALB + IPv4 + ECR) but well below the pre-optimization $57.65 — so any regression in either direction triggers an email before a meaningful runway impact.
+
+### Trade-offs
+
+- **Spot reclaim risk on API.** A reclaim during the 80% Spot exposure window means a brief outage (seconds, while ECS launches a replacement on a different capacity provider). Mitigated by the 80/20 mix rather than eliminated.
+- **Worker performance under load.** At 0.25 vCPU, ffmpeg transcoding takes ~2× longer per job. Acceptable for the current portfolio job volume; would need to revisit at sustained throughput.
+- **Right-sizing reversibility.** The previous task definition `vtaas-worker:1` (0.5 vCPU / 1 GB) is preserved in ECS and can be reactivated with `aws ecs update-service --task-definition vtaas-worker:1` if the smaller size proves insufficient.
+
+### Result
+
+Projected gross monthly cost:
+
+| Stage | Worker | API | Fargate total | ALB | IPv4 | ECR | Total | vs April |
+|---|---|---|---|---|---|---|---|---|
+| April baseline | $17.77 | $8.89 | $26.66 | $16.20 | $14.41 | $0.38 | **$57.65** | — |
+| After right-size + Spot | $2.67 | $3.91 | $6.58 | $16.20 | $14.41 | $0.10 | **~$37.30** | −$20.35 |
+
+The ~$30/mo of ALB + IPv4 is the **structural floor** of running an internet-facing ALB with public-IP Fargate tasks. There is no further reduction possible without changing the architecture (e.g. API Gateway + Lambda, NAT Gateway with private subnets, scale-to-zero) — all rejected as too invasive for the savings.
+
+Credit runway extends from ~25 days to ~75–90 days at the new gross rate.
+
+### What we considered and rejected
+
+- **Scale-to-zero worker.** Considered; rejected. Worker at 0.25 vCPU on Spot costs $2.67/mo. Implementation requires CloudWatch alarm on SQS queue depth, step-scaling policy, alarm tuning to avoid flapping, and 2–3 min cold start per first-job latency. Engineering effort wouldn't pay back in years.
+- **API Gateway + Lambda migration.** Considered; rejected. Would eliminate Fargate cost (~$8.89/mo) and remove the ALB ($16.20/mo) and most of the IPv4 charge. But: rewriting NestJS to Lambda handlers is a multi-week effort with cold-start regressions in user-facing latency, plus loss of the WebSocket-style features available behind ALB. Not worth ~$25/mo on a portfolio project.
+- **NAT Gateway to eliminate public IPs on Fargate.** Considered; rejected. A NAT Gateway costs $32/mo on its own — more than the entire $14.41 IPv4 line it would replace.
+- **Single-AZ ALB.** Rejected for resilience reasons (AZ-level outage takes site down) for no meaningful cost reduction.
+- **Migrating worker off Fargate to EC2 Spot.** Rejected. EC2 Spot is cheaper per vCPU-hr but introduces instance lifecycle management, AMI maintenance, and AutoScaling group configuration — operational burden that doesn't fit a portfolio project.
+
+### Post-optimization state: frozen via hibernate-deep
+
+After the live optimizations above were committed and pushed, the project was frozen on 2026-05-21 via `./scripts/vtaas-ops.sh hibernate-deep`. This took the cost further from the ~$37/mo live floor to **~$0.50/mo** by removing the two pieces of structural cost (ALB and IPv4) that couldn't be touched while serving traffic:
+
+- Both ECS services scaled to `desiredCount=0` (drained, then idle)
+- ALB and its HTTP:80 listener deleted
+- ALB + listener config snapshotted to `~/.vtaas-ops/last-alb.json` and `~/.vtaas-ops/last-listeners.json` for clean recreation
+- Static portfolio frontend on Vercel continues to serve normally; `/api/*` requests fail (no ALB to rewrite to) — accepted as the cost of freezing
+
+Frozen-state monthly cost:
+
+| Service | $/mo |
+|---|---|
+| ECR storage (post-lifecycle, ~3 GB/repo × 2) | ~$0.50 |
+| Everything else (S3, CloudWatch, Route 53 — within free tier) | $0.00 |
+| **Frozen total** | **~$0.50** |
+
+ECS services, capacity providers, task definitions, target group, security groups, IAM roles, ECR images, and S3 buckets are all preserved. Resume rebuilds only the ALB and re-scales the services.
+
+#### Resume procedure
+
+Documented in `RESUME.md` at repo root. Three steps:
+
+1. `./scripts/vtaas-ops.sh resume-deep` — recreates ALB + HTTP listener, scales both services back to 1
+2. Update Vercel `vercel.json` `/api/*` rewrite destination to the new ALB DNS (the script prints it on completion)
+3. Trigger a Vercel redeploy
+
+The new ALB DNS will differ from `vtaas-alb-622316371.us-east-1.elb.amazonaws.com` because AWS regenerates the DNS at ALB creation time. The saved JSON in `~/.vtaas-ops/last-alb.json` is a reference for the prior state (subnets, SGs, listener config — all of which the script re-uses from CONFIG, not from the JSON).
+
+### References
+
+- Optimization brief: in conversation history (not in repo)
+- Baseline measurements: `docs/private/optimization-baseline-20260521.md` (gitignored)
+- Tooling: `scripts/vtaas-ops.sh`, `scripts/ecr-lifecycle.json`
+- Resume procedure: `RESUME.md` (repo root)
+- Prior decisions referenced: D-011 (SQS configuration), D-035 (AWS resources), D-037 (worker always-on)
